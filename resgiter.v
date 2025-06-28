@@ -1,7 +1,6 @@
-// register.v
+// registrador.v
 // Registrador genérico de N bits com load enable e reset assíncrono.
-// Substitui o arquivo Registrador.vhd corrompido.
-module Registrador #(
+module registrador #(
     parameter WIDTH = 32
 )(
     input wire clk,
@@ -17,5 +16,4 @@ module Registrador #(
         else if (Load)
             Saida <= Entrada;
     end
-
 endmodule

@@ -1,20 +1,19 @@
 // divider.v
-// Módulo que implementa divisão 32x32 com sinal.
-// Leva 32 ciclos.
+// Módulo que implementa divisão 32x32 com sinal. Leva 33 ciclos.
 module divider (
     input wire signed [31:0] a,         // Dividendo
     input wire signed [31:0] b,         // Divisor
     input wire               start,
     input wire               clk,
     input wire               reset,
-    output reg signed [31:0] quotient,    // Quociente
-    output reg signed [31:0] remainder,   // Resto
+    output reg signed [31:0] quotient,    // Quociente (LO)
+    output reg signed [31:0] remainder,   // Resto (HI)
     output reg               done,
     output reg               div_by_zero
 );
 
     reg [31:0] abs_a, abs_b;
-    reg [63:0] dividend_reg; // Remainder (upper 32) and quotient (lower 32)
+    reg [63:0] temp_dividend; // [63:32] é o resto, [31:0] é o dividendo/quociente
     reg [5:0]  count;
     reg        sign_quotient;
     reg        sign_remainder;
@@ -34,29 +33,29 @@ module divider (
                 done <= 1'b1;
             end else begin
                 // Armazena sinais e usa valores absolutos
-                abs_a = (a[31]) ? -a : a;
-                abs_b = (b[31]) ? -b : b;
+                abs_a = a[31] ? -a : a;
+                abs_b = b[31] ? -b : b;
                 sign_quotient = a[31] ^ b[31];
                 sign_remainder = a[31];
 
-                dividend_reg <= {33'd0, abs_a}; // Começa com o dividendo
+                temp_dividend <= {32'd0, abs_a}; // Inicia com o dividendo nos bits inferiores
                 count <= 6'd0;
             end
         end else if (!done && !div_by_zero) begin
             if (count < 32) begin
-                // Algoritmo de divisão restauradora
-                dividend_reg <= dividend_reg << 1; // Shift left
+                // Algoritmo de divisão não restauradora
+                temp_dividend <= temp_dividend << 1; // Shift left
                 
-                if (dividend_reg[63:32] >= abs_b) begin
-                    dividend_reg[63:32] <= dividend_reg[63:32] - abs_b;
-                    dividend_reg[0] <= 1'b1; // Seta bit do quociente
+                if (temp_dividend[63:32] >= abs_b) begin
+                    temp_dividend[63:32] <= temp_dividend[63:32] - abs_b;
+                    temp_dividend[0] <= 1'b1; // Seta bit do quociente
                 end
                 
                 count <= count + 1;
             end else begin
                 // Ajusta sinais no final
-                quotient <= (sign_quotient) ? -dividend_reg[31:0] : dividend_reg[31:0];
-                remainder <= (sign_remainder) ? -dividend_reg[63:32] : dividend_reg[63:32];
+                quotient <= sign_quotient ? -temp_dividend[31:0] : temp_dividend[31:0];
+                remainder <= sign_remainder ? -temp_dividend[63:32] : temp_dividend[63:32];
                 done <= 1'b1;
             end
         end
