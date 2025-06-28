@@ -1,4 +1,4 @@
-module pc (
+module PC (
     input wire clk,                // Clock global
     input wire reset,              // Sinal de reset
     output wire [31:0] pc_out      // Saída do Program Counter

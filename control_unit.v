@@ -127,7 +127,7 @@ module control_unit (
                                     Jump <= 0;
                                     ALUOp <= 3'b111; // Move from LO
                                 end
-                                6'b000000: begin // sll
+                                6'b000100: begin // sll (funct code corrected to 000100)
                                     RegWrite <= 1;
                                     MemWrite <= 0;
                                     MemRead <= 0;
@@ -281,7 +281,12 @@ module control_unit (
 
                 WRITEBACK: begin
                     // Escreve o resultado no banco de registradores
-                    RegWrite <= 1; // Ativa a escrita no banco de registradores
+                    // Ajusta RegWrite para ativar somente se a instrução requer escrita
+                    if (RegWrite == 1'b1) begin
+                        RegWrite <= 1;
+                    end else begin
+                        RegWrite <= 0;
+                    end
                     state <= FETCH; // Retorna ao estado FETCH após a escrita
                 end
 
