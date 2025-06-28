@@ -31,13 +31,6 @@ Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  
 -- Compiling entity RegDesloc
 -- Compiling architecture behavioral_arch of RegDesloc
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/SingExtend_16x32.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/SingExtend_16x32.v}
-Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module SingExtend_16x32
-
-Top level modules:
-	SingExtend_16x32
-
 } {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/Componentes do Projeto/Banco_reg.vhd} {1 {vcom -work work -2002 -explicit -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/Componentes do Projeto/Banco_reg.vhd}
 Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
 -- Loading package STANDARD
@@ -47,15 +40,22 @@ Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  
 -- Compiling entity Banco_reg
 -- Compiling architecture behavioral_arch of Banco_reg
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/cpu_components.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/cpu_components.v}
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/SingExtend_16x32.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/SingExtend_16x32.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module cpu_control_unit
+-- Compiling module SingExtend_16x32
+
+Top level modules:
+	SingExtend_16x32
+
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/cpu_components_complete.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/cpu_components_complete.v}
+Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+-- Compiling module cpu_control_unit_complete
 -- Compiling module mux2_1_32b
 -- Compiling module mux4_1_32b
 -- Compiling module mux2_1_5b
 
 Top level modules:
-	cpu_control_unit
+	cpu_control_unit_complete
 	mux2_1_32b
 	mux4_1_32b
 	mux2_1_5b
@@ -72,12 +72,12 @@ Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  
 -- Compiling entity Memoria
 -- Compiling architecture behavioral_arch of Memoria
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/divider.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/divider.v}
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/multiplier.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/multiplier.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module divider
+-- Compiling module multiplier
 
 Top level modules:
-	divider
+	multiplier
 
 } {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/exception.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/exception.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
@@ -86,12 +86,12 @@ Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  
 Top level modules:
 	exception
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/multiplier.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/multiplier.v}
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/divider.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/divider.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module multiplier
+-- Compiling module divider
 
 Top level modules:
-	multiplier
+	divider
 
 } {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/shift_left_2.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projeto/shift_left_2.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
