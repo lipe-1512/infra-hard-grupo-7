@@ -1,5 +1,6 @@
 // register.v
 // Registrador genérico de N bits com load enable e reset assíncrono.
+// Substitui o arquivo Registrador.vhd corrompido.
 module Registrador #(
     parameter WIDTH = 32
 )(
@@ -11,11 +12,10 @@ module Registrador #(
 );
 
     always @(posedge clk or posedge reset) begin
-        if (reset) begin
+        if (reset)
             Saida <= {WIDTH{1'b0}};
-        end else if (Load) begin
+        else if (Load)
             Saida <= Entrada;
-        end
     end
 
 endmodule
