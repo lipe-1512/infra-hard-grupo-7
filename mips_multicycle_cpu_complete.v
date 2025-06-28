@@ -1,4 +1,4 @@
-`include "cpu_components_complete.v"
+`include "cpu_components_complete.v" // Incluindo a versão corrigida
 `include "shifter_general.v"
 
 module mips_multicycle_cpu_complete (
@@ -17,7 +17,7 @@ module mips_multicycle_cpu_complete (
     wire Start_mult_div;
 
     // Fios do Datapath
-    wire [31:0] pc_in, pc_out, epc_out, exception_handler_addr;
+    wire [31:0] pc_in, pc_in_temp, pc_out, epc_out, exception_handler_addr;
     wire [31:0] mem_addr, mem_data_out, mdr_out;
     wire [31:0] reg_a_out, reg_b_out, reg_read_data1, reg_read_data2, reg_write_data;
     wire [31:0] alu_in_a, alu_in_b, alu_out_s, alu_out_reg_out;
@@ -50,14 +50,25 @@ module mips_multicycle_cpu_complete (
 
     multiplier mult_unit ( .clk(clk), .a(reg_a_out), .b(reg_b_out), .start(Start_mult_div && (funct==6'b011000)), .result(mult_result), .done(mult_done) );
     divider div_unit ( .clk(clk), .a(reg_a_out), .b(reg_b_out), .start(Start_mult_div && (funct==6'b011010)), .quotient(div_quotient), .remainder(div_remainder), .done(div_done) );
-    wire mult_div_done_signal = (op == OP_RTYPE) ? ((funct==F_MULT) ? mult_done : div_done) : 1'b0;
     
-    hi_lo_registers hi_lo_regs ( .clk(clk), .reset(reset), .hi_in( (funct==F_MULT) ? mult_result[63:32] : div_remainder ), .lo_in( (funct==F_MULT) ? mult_result[31:0] : div_quotient ), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out) );
+    // *** LINHA COM ERRO REMOVIDA ***
+    
+    hi_lo_registers hi_lo_regs ( .clk(clk), .reset(reset), .hi_in( (funct==6'b011000) ? mult_result[63:32] : div_remainder ), .lo_in( (funct==6'b011000) ? mult_result[31:0] : div_quotient ), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out) );
 
     //================================================================
     // Unidade de Controle
     //================================================================
-    cpu_control_unit_complete control_unit ( .clk(clk), .reset(reset), .opcode(op), .funct(funct), .mult_div_done(mult_div_done_signal), .exception_detected(exception_signal), .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .IorD(IorD), .MemRead(MemRead), .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), .AWrite(AWrite), .BWrite(BWrite), .ALUOutWrite(ALUOutWrite), .HIWrite(HIWrite), .LOWrite(LOWrite), .EPCWrite(EPCWrite), .MemtoReg(MemtoReg), .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB), .ALUOp(ALUOp), .ShifterOp(ShifterOp), .ALUResultSrc(ALUResultSrc), .PCSrc(PCSrc), .Start_mult_div(Start_mult_div) );
+    // *** INSTANCIAÇÃO ATUALIZADA ***
+    cpu_control_unit_complete control_unit ( 
+        .clk(clk), .reset(reset), .opcode(op), .funct(funct), 
+        .mult_done(mult_done), .div_done(div_done), // Passando os sinais diretamente
+        .exception_detected(exception_signal), 
+        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .IorD(IorD), .MemRead(MemRead), .MemWrite(MemWrite), 
+        .IRWrite(IRWrite), .RegWrite(RegWrite), .AWrite(AWrite), .BWrite(BWrite), .ALUOutWrite(ALUOutWrite), 
+        .HIWrite(HIWrite), .LOWrite(LOWrite), .EPCWrite(EPCWrite), .MemtoReg(MemtoReg), .RegDst(RegDst), 
+        .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB), .ALUOp(ALUOp), .ShifterOp(ShifterOp), 
+        .ALUResultSrc(ALUResultSrc), .PCSrc(PCSrc), .Start_mult_div(Start_mult_div) 
+    );
 
     //================================================================
     // Datapath Principal
@@ -69,13 +80,9 @@ module mips_multicycle_cpu_complete (
     SingExtend_16x32 sign_ext (.in1(imm), .out(sign_ext_out));
     shift_left_2 shift_left_imm (.in(sign_ext_out), .out(sign_ext_shifted_out));
 
-    // MUX para fonte A da ULA
     mux2_1_32b alu_src_a_mux ( .d0(pc_out), .d1(reg_a_out), .sel(ALUSrcA[0]), .y(alu_in_a) );
-
-    // MUX para fonte B da ULA (expandido)
     mux4_1_32b alu_src_b_mux ( .d0(reg_b_out), .d1(32'd4), .d2(sign_ext_out), .d3(sign_ext_shifted_out), .sel(ALUSrcB[1:0]), .y(alu_in_b) );
 
-    // ULA e Shifter
     Ula32 alu_unit ( .A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp), .S(alu_out_s), .z(alu_zero_flag), .Overflow(alu_overflow_flag) );
     shifter_general shifter ( .in(reg_b_out), .shamt(shamt), .sh_op(ShifterOp), .out(shifter_out) );
     mux2_1_32b alu_or_shifter_mux ( .d0(alu_out_s), .d1(shifter_out), .sel(ALUResultSrc), .y(alu_or_shifter_result) );
@@ -93,6 +100,7 @@ module mips_multicycle_cpu_complete (
     //================================================================
     assign jump_addr = {pc_plus_4[31:28], mem_data_out[25:0], 2'b00};
     mux4_1_32b pc_src_mux ( .d0(alu_out_s), .d1(alu_out_reg_out), .d2(jump_addr), .d3(reg_a_out), .sel(PCSrc[1:0]), .y(pc_in_temp) );
-    mux2_1_32b pc_exc_mux ( .d0(pc_in_temp), .d1(exception_handler_addr), .sel(PCSrc[2]), .y(pc_in) ); // PCSrc[2] seleciona o PC de exceção
+    // MUX final para selecionar entre o próximo PC normal e o endereço de exceção
+    mux2_1_32b pc_exc_mux ( .d0(pc_in_temp), .d1(exception_handler_addr), .sel(PCSrc[2]), .y(pc_in) );
 
 endmodule

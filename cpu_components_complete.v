@@ -7,8 +7,9 @@ module cpu_control_unit_complete (
     input wire reset,
     input wire [5:0] opcode,
     input wire [5:0] funct,
-    // Sinais de status do datapath
-    input wire mult_div_done,
+    // Sinais de status do datapath (ENTRADAS MODIFICADAS)
+    input wire mult_done,
+    input wire div_done,
     input wire exception_detected,
     // Sinais de controle para o datapath
     output reg PCWrite, PCWriteCond,
@@ -46,6 +47,11 @@ module cpu_control_unit_complete (
     localparam F_SLL = 6'b000000, F_SRL  = 6'b000010, F_SRA = 6'b000011;
     localparam F_MULT= 6'b011000, F_DIV  = 6'b011010;
     localparam F_MFHI= 6'b010000, F_MFLO = 6'b010010;
+    
+    // *** LÓGICA MOVIDA PARA DENTRO DO MÓDULO CORRETO ***
+    wire mult_div_done_internal;
+    assign mult_div_done_internal = (opcode == OP_RTYPE) ? ((funct == F_MULT) ? mult_done : div_done) : 1'b0;
+
 
     // Lógica sequencial da FSM
     always @(posedge clk or posedge reset) begin
@@ -81,7 +87,8 @@ module cpu_control_unit_complete (
             S_MEM_READ:  next_state = S_MEM_WB;
             S_EXEC_R:    next_state = S_WB_R;
             S_ADDI_EXEC: next_state = S_ADDI_WB;
-            S_MULT_DIV_WAIT: next_state = mult_div_done ? S_FETCH : S_MULT_DIV_WAIT;
+            // *** LÓGICA ATUALIZADA PARA USAR O SINAL INTERNO ***
+            S_MULT_DIV_WAIT: next_state = mult_div_done_internal ? S_FETCH : S_MULT_DIV_WAIT;
             S_EXCEPTION: next_state = S_FETCH;
             default:     next_state = S_FETCH; // Estados de WB, Jumps, etc.
         endcase
@@ -109,7 +116,8 @@ module cpu_control_unit_complete (
             S_BRANCH:    begin ALUSrcA=2'b01; ALUSrcB=3'b000; ALUOp=3'b010; PCWriteCond=1; PCSrc=3'b001; end
             S_JUMP:      begin PCWrite=1; PCSrc=3'b010; end
             S_JR:        begin PCWrite=1; PCSrc=3'b011; end
-            S_MULT_DIV_WAIT: begin Start_mult_div=1; if(mult_div_done) begin HIWrite=1; LOWrite=1; end end
+            // *** LÓGICA ATUALIZADA PARA USAR O SINAL INTERNO ***
+            S_MULT_DIV_WAIT: begin Start_mult_div=1; if(mult_div_done_internal) begin HIWrite=1; LOWrite=1; end end
             S_MFHI_WB:   begin RegWrite=1; MemtoReg=2'b10; RegDst=2'b01; end
             S_MFLO_WB:   begin RegWrite=1; MemtoReg=2'b11; RegDst=2'b01; end
             S_EXCEPTION: begin EPCWrite=1; PCWrite=1; PCSrc=3'b100; end // Salva EPC, pula para handler
@@ -117,7 +125,10 @@ module cpu_control_unit_complete (
     end
 endmodule
 
-// MUXes (iguais à versão anterior)
+
+//****************************************************************************
+// Módulos de Multiplexadores (MUX) - Sem alterações
+//****************************************************************************
 module mux2_1_32b(input [31:0] d0, d1, input sel, output [31:0] y); assign y = sel ? d1 : d0; endmodule
 module mux4_1_32b(input [31:0] d0, d1, d2, d3, input [1:0] sel, output [31:0] y); assign y = sel[1] ? (sel[0] ? d3 : d2) : (sel[0] ? d1 : d0); endmodule
 module mux2_1_5b(input [4:0] d0, d1, input sel, output [4:0] y); assign y = sel ? d1 : d0; endmodule
