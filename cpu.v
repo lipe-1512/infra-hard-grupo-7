@@ -1,5 +1,5 @@
 // cpu.v
-// Módulo Top-Level do Datapath, com lógica de HI/LO e flags corrigida.
+// Módulo Top-Level do Datapath, com as conexões da ULA corrigidas.
 module cpu(
     input wire clk,
     input wire reset
@@ -27,6 +27,9 @@ module cpu(
     wire signed [31:0] div_quotient, div_remainder;
     wire        mult_done, div_done, div_by_zero_flag;
     wire signed [31:0] hi_out, lo_out;
+
+    // ** NOVOS WIRES DECLARADOS AQUI para corrigir os warnings **
+    wire        ula_negativo, ula_igual, ula_maior, ula_menor;
 
     // IR fields
     wire [5:0]  ir_opcode;
@@ -59,7 +62,8 @@ module cpu(
     assign ir_rd = ir_immediate[15:11];
     assign ir_shamt = ir_immediate[10:6];
     assign ir_funct = ir_immediate[5:0];
-    assign ir_jump_addr = ir_immediate[15:0]; // Extrai 16 bits, será concatenado depois
+    // Correção da lógica de jump address
+    assign ir_jump_addr = {ir_rs, ir_rt, ir_immediate[15:0]}; 
 
     // Internal Registers
     registrador #(32) mdr_reg (.clk(clk), .reset(reset), .Load(1'b1), .Entrada(mem_data_out), .Saida(mdr_out));
@@ -90,23 +94,22 @@ module cpu(
     
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
-    Ula32 ula (.A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow));
+    
+    // ** CONEXÕES ADICIONADAS AQUI **
+    Ula32 ula (
+        .A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow),
+        .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor)
+    );
     assign alu_result = (ALUOp[3]) ? shifted_b_reg : alu_result_from_ula;
 
     // Multiplier/Divider Units
     multiplier mult_unit (.a(reg_a_out), .b(reg_b_out), .start(MultStart), .clk(clk), .reset(reset), .result(mult_result), .done(mult_done));
     divider div_unit (.a(reg_a_out), .b(reg_b_out), .start(DivStart), .clk(clk), .reset(reset), .quotient(div_quotient), .remainder(div_remainder), .done(div_done), .div_by_zero(div_by_zero_flag));
     
-    // ** CORREÇÃO DE LÓGICA AQUI **
-    // Seleciona a fonte de dados correta para HI/LO baseado na instrução em execução, não em sinais de controle momentâneos
     wire signed [31:0] hi_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[63:32] : div_remainder;
     wire signed [31:0] lo_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[31:0]  : div_quotient;
     
     hi_lo_registers hi_lo_regs (.clk(clk), .reset(reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
-    
-    // Exception Logic (Exemplo de conexão)
-    // wire invalid_opcode_flag = ... // Lógica para detectar opcodes inválidos
-    // exception exception_unit (.overflow(ula_overflow), .div_by_zero(div_by_zero_flag), .invalid_opcode(invalid_opcode_flag), ...);
     
     // FSM Instantiation
     control_unit FSM (
