@@ -58,7 +58,7 @@
 PACKAGE ram_constants IS
 	CONSTANT DATA_WIDTH : INTEGER := 8;
 	CONSTANT ADDR_WIDTH : INTEGER := 8;
-	CONSTANT INIT_FILE : STRING := "C:\Users\felip\OneDrive\Documents\faculdade\infra hard\projeto\Componentes do Projeto\instrucoes.mif";
+	CONSTANT INIT_FILE : STRING := "instrucoes.mif";
 END ram_constants;
 
 --*************************************************************************
