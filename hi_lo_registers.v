@@ -10,13 +10,13 @@ module hi_lo_registers (
 );
 
     always @(posedge clk or posedge reset) begin
-        if (reset) begin
-            hi_out <= 32'b0;
-            lo_out <= 32'b0;
-        end else begin
-            if (hi_write) hi_out <= hi_in;
-            if (lo_write) lo_out <= lo_in;
-        end
+    if (reset) begin
+        hi_out <= 32'h00000000;
+        lo_out <= 32'h00000000;
+    end else begin
+        if (hi_write) hi_out <= hi_in;
+        if (lo_write) lo_out <= lo_in;
     end
+end
 
 endmodule

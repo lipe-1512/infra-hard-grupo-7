@@ -33,7 +33,11 @@ module cpu(
     wire        mult_done, div_done, div_by_zero_flag;
     wire signed [31:0] hi_out, lo_out;
     wire        ula_negativo, ula_igual, ula_maior, ula_menor;
-    wire signed [31:0] slt_result; // CORREÇÃO: Fio para o resultado do SLT
+    wire signed [31:0] slt_result; 
+    wire [31:0] epc;
+    wire exception;
+    wire [2:0] exception_code;
+    wire [31:0] new_pc;
 
     // IR fields
     wire [5:0]  ir_opcode;
@@ -121,12 +125,41 @@ module cpu(
     hi_lo_registers hi_lo_regs (.clk(clk), .reset(hi_lo_reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
     
     // FSM Instantiation
-    control_unit FSM (
-        .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), .mult_done_in(mult_done), .div_done_in(div_done),
-        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), .IorD(IorD), .MemRead(MemRead),
-        .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
-        .PCSource(PCSource), .ALUOp(ALUOp), .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
-        .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc),
-        .PCClear(PCClear), .RegsClear(RegsClear)
-    );
+control_unit u_control (
+    .clk(clk),
+    .reset(reset),
+    .opcode(opcode),
+    .funct(funct),
+    .mult_done_in(mult_done),
+    .div_done_in(div_done),
+    .PCWrite(PCWrite),
+    .PCWriteCond(PCWriteCond),
+    .PCWriteCondNeg(PCWriteCondNeg),
+    .IorD(IorD),
+    .MemRead(MemRead),
+    .MemWrite(MemWrite),
+    .IRWrite(IRWrite),
+    .RegWrite(RegWrite),
+    .RegDst(RegDst),
+    .ALUSrcA(ALUSrcA),
+    .ALUSrcB(ALUSrcB),
+    .PCSource(PCSource),
+    .ALUOp(ALUOp),
+    .HIWrite(HIWrite),
+    .LOWrite(LOWrite),
+    .MultStart(MultStart),
+    .DivStart(DivStart),
+    .WBDataSrc(WBDataSrc),
+    .MemAddrSrc(MemAddrSrc),
+    .MemDataInSrc(MemDataInSrc),
+    .PCClear(PCClear),
+    .RegsClear(RegsClear),
+    .TempRegWrite(TempRegWrite),
+    .MemtoRegA(MemtoRegA),
+
+    .epc(epc),
+    .exception(exception),
+    .exception_code(exception_code),
+    .new_pc(new_pc)
+);
 endmodule
