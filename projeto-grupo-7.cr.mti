@@ -30,22 +30,19 @@ Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  
 Top level modules:
 	registrador
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd} {0 {vcom -work work -2002 -explicit -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd}
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd} {1 {vcom -work work -2002 -explicit -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd}
 Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
 -- Loading package STANDARD
+-- Compiling package ram_constants
 -- Loading package TEXTIO
 -- Loading package std_logic_1164
 -- Loading package NUMERIC_STD
--- Compiling package ram_constants
+-- Loading package LPM_COMPONENTS
+-- Loading package ram_constants
 -- Compiling entity Memoria
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(20): (vcom-1136) Unknown identifier "STD_LOGIC_VECTOR".
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(21): (vcom-1136) Unknown identifier "STD_LOGIC".
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(22): (vcom-1136) Unknown identifier "STD_LOGIC".
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(23): (vcom-1136) Unknown identifier "STD_LOGIC_VECTOR".
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(24): (vcom-1136) Unknown identifier "STD_LOGIC_VECTOR".
-** Error: C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Memoria.vhd(26): VHDL Compiler exiting
+-- Compiling architecture behavioral_arch of Memoria
 
-} {9.0 15.0} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/divider.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/divider.v}
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/divider.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/divider.v}
 Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
 -- Compiling module divider
 
