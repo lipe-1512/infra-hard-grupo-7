@@ -15,7 +15,6 @@ module cpu(
     wire        HIWrite, LOWrite, MultStart, DivStart;
     wire [2:0]  WBDataSrc;
     wire        MemDataInSrc;
-    // ** NOVOS SINAIS VINDOS DA FSM **
     wire        PCClear;
     wire        RegsClear;
 
@@ -75,67 +74,44 @@ module cpu(
     registrador #(32) alu_out_reg_inst (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(alu_result), .Saida(alu_out_reg));
 
     // Byte handling logic for lb
-    wire [7:0] byte_from_mdr;
-    assign byte_from_mdr = (alu_out_reg[1:0] == 2'b00) ? mdr_out[7:0]   :
-                           (alu_out_reg[1:0] == 2'b01) ? mdr_out[15:8]  :
-                           (alu_out_reg[1:0] == 2'b10) ? mdr_out[23:16] : mdr_out[31:24];
+    wire [7:0] byte_from_mdr = (alu_out_reg[1:0] == 2'b00) ? mdr_out[7:0]   :
+                               (alu_out_reg[1:0] == 2'b01) ? mdr_out[15:8]  :
+                               (alu_out_reg[1:0] == 2'b10) ? mdr_out[23:16] : mdr_out[31:24];
     wire signed [31:0] byte_extended = {{24{byte_from_mdr[7]}}, byte_from_mdr};
 
     // Register File Write-Back Logic
     mux_RegDst mux_write_reg (.in1(ir_rt), .in2(ir_rd), .sel(RegDst[0]), .out(write_reg_mux_out));
-    assign write_data_mux_out = (WBDataSrc == 3'b000) ? alu_out_reg :
-                                (WBDataSrc == 3'b001) ? mdr_out :
+    assign write_data_mux_out = (WBDataSrc == 3'b001) ? mdr_out :
+                                (WBDataSrc == 3'b100) ? byte_extended :
                                 (WBDataSrc == 3'b010) ? hi_out :
                                 (WBDataSrc == 3'b011) ? lo_out :
-                                (WBDataSrc == 3'b100) ? byte_extended : 32'hxxxxxxxx;
-                                
+                                alu_out_reg; // Default
     wire banco_reg_reset = reset || RegsClear;
-    Banco_reg banco_registradores (
-        .Clk(clk), .Reset(banco_reg_reset), .RegWrite(RegWrite), 
-        .ReadReg1(ir_rs), .ReadReg2(ir_rt), 
-        .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), 
-        .WriteData(write_data_mux_out), 
-        .ReadData1(read_data_1), .ReadData2(read_data_2)
-    );
+    Banco_reg banco_registradores (.Clk(clk), .Reset(banco_reg_reset), .RegWrite(RegWrite), .ReadReg1(ir_rs), .ReadReg2(ir_rt), .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), .WriteData(write_data_mux_out), .ReadData1(read_data_1), .ReadData2(read_data_2));
     
     // ALU Logic
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
     wire signed [31:0] alu_in_a = ALUSrcA ? reg_a_out : pc_out;
     wire signed [31:0] shifted_b_reg = (ALUOp == 4'b1000) ? ($signed(reg_b_out) << ir_shamt) : ($signed(reg_b_out) >>> ir_shamt);
-    
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
-    
-    Ula32 ula (
-        .A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow),
-        .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor)
-    );
+    Ula32 ula (.A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow), .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor));
     assign alu_result = (ALUOp[3]) ? shifted_b_reg : alu_result_from_ula;
 
     // Multiplier/Divider Units
     multiplier mult_unit (.a(reg_a_out), .b(reg_b_out), .start(MultStart), .clk(clk), .reset(reset), .result(mult_result), .done(mult_done));
     divider div_unit (.a(reg_a_out), .b(reg_b_out), .start(DivStart), .clk(clk), .reset(reset), .quotient(div_quotient), .remainder(div_remainder), .done(div_done), .div_by_zero(div_by_zero_flag));
-    
     wire signed [31:0] hi_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[63:32] : div_remainder;
     wire signed [31:0] lo_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[31:0]  : div_quotient;
-    
     wire hi_lo_reset = reset || RegsClear;
-    hi_lo_registers hi_lo_regs (
-        .clk(clk), .reset(hi_lo_reset), 
-        .hi_in(hi_in_data), .lo_in(lo_in_data), 
-        .hi_write(HIWrite), .lo_write(LOWrite), 
-        .hi_out(hi_out), .lo_out(lo_out)
-    );
+    hi_lo_registers hi_lo_regs (.clk(clk), .reset(hi_lo_reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
     
     // FSM Instantiation
     control_unit FSM (
-        .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), 
-        .mult_done_in(mult_done), .div_done_in(div_done),
-        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), 
-        .IorD(IorD), .MemRead(MemRead), .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), 
-        .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
-        .PCSource(PCSource), .ALUOp(ALUOp), 
-        .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
+        .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), .mult_done_in(mult_done), .div_done_in(div_done),
+        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), .IorD(IorD), .MemRead(MemRead),
+        .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
+        .PCSource(PCSource), .ALUOp(ALUOp), .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
         .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc),
         .PCClear(PCClear), .RegsClear(RegsClear)
     );
