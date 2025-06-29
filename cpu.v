@@ -1,9 +1,22 @@
-// cpu.v
-// Datapath atualizado para usar reset síncrono controlado pela FSM.
+// FILE: cpu.v (MODIFICADO PARA GERAR RESET INTERNO)
+// O clock continua sendo uma entrada, mas o reset é gerado internamente para a simulação.
 module cpu(
-    input wire clk,
-    input wire reset // Sinal de reset global
+    input wire clk // Apenas clk é uma entrada agora
 );
+    // ================== BLOCO DE SIMULAÇÃO INTERNO ==================
+    // Declara reset como um registrador interno
+    reg reset;
+
+    // Bloco para gerar o pulso de reset automaticamente
+    initial begin
+        reset = 1'b1;   // Inicia o reset em 1
+        #50;            // Espera 50ps
+        reset = 1'b0;   // Coloca o reset em 0 para sempre
+    end
+    // ===============================================================
+
+    // O resto do código da CPU permanece o mesmo
+    
     // Control Signals
     wire        PCWrite, PCWriteCond, PCWriteCondNeg;
     wire        IorD, MemRead, MemWrite, IRWrite, RegWrite;
