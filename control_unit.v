@@ -1,5 +1,5 @@
 // control_unit.v
-// FSM com reset assíncrono para o registrador de estado, garantindo inicialização correta.
+// FSM com códigos de operação da ULA e lógica de SLT corrigidos.
 module control_unit (
     input wire clk, reset,
     input wire [5:0] opcode,
@@ -21,7 +21,7 @@ module control_unit (
     output reg RegsClear
 );
 
-    // Parâmetros de estado
+    // Parâmetros de estado (sem alterações)
     parameter S_RESET            = 0, S_FETCH            = 1, S_DECODE           = 2,
               S_MEM_ADDR         = 3, S_LW_READ          = 4, S_LW_WB            = 5,
               S_SW_WRITE         = 6, S_R_EXECUTE        = 7, S_R_WB             = 8,
@@ -31,7 +31,7 @@ module control_unit (
               S_MFLO_WB          = 18, S_LB_READ         = 19, S_LB_WB           = 20,
               S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23;
 
-    // Opcodes e Functs
+    // Opcodes e Functs (sem alterações)
     localparam OP_RTYPE = 6'b000000; localparam OP_ADDI = 6'b001000;
     localparam OP_LW    = 6'b100011; localparam OP_SW   = 6'b101011;
     localparam OP_BEQ   = 6'b000100; localparam OP_BNE  = 6'b000101;
@@ -89,7 +89,7 @@ module control_unit (
         endcase
     end
     
-    // Atualização de Estado com RESET ASSÍNCRONO
+    // Atualização de Estado com RESET ASSÍNCRONO (sem alterações)
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             state <= S_RESET;
@@ -98,7 +98,7 @@ module control_unit (
         end
     end
 
-    // Lógica de Geração de Sinais (sem alterações)
+    // Lógica de Geração de Sinais (COM CORREÇÕES)
     always @(*) begin
         // Valores Padrão
         PCWrite = 0; PCWriteCond = 0; PCWriteCondNeg = 0;
@@ -112,15 +112,18 @@ module control_unit (
                 PCClear = 1;
                 RegsClear = 1;
             end
-            S_FETCH: begin
+            S_FETCH: begin // PC = PC + 4
                 MemRead = 1; IRWrite = 1; PCWrite = 1; ALUSrcA = 0;
-                ALUSrcB = 2'b01; ALUOp = 4'b0010;
+                ALUSrcB = 2'b01; 
+                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
             end
-            S_DECODE: begin
-                ALUSrcB = 2'b11; ALUOp = 4'b0010;
+            S_DECODE: begin // Pre-calculo de endereço de branch
+                ALUSrcB = 2'b11; 
+                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
             end
-            S_MEM_ADDR: begin
-                ALUSrcB = 2'b10; ALUOp = 4'b0010;
+            S_MEM_ADDR: begin // Endereço para LW/SW = Reg[rs] + imm
+                ALUSrcB = 2'b10; 
+                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
             end
             S_LW_READ, S_LB_READ, S_SB_READ_WORD: begin
                 MemRead = 1; IorD = 1;
@@ -137,30 +140,44 @@ module control_unit (
             S_R_EXECUTE: begin
                 ALUSrcB = 2'b00;
                 case(funct)
-                    F_ADD: ALUOp = 4'b0010;
-                    F_SUB: ALUOp = 4'b0110;
-                    F_AND: ALUOp = 4'b0000;
-                    F_SLT: ALUOp = 4'b0111;
+                    F_ADD: ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
+                    F_SUB: ALUOp = 4'b0010; // CORREÇÃO: ULA SUB
+                    F_AND: ALUOp = 4'b0011; // CORREÇÃO: ULA AND
+                    F_SLT: ALUOp = 4'b0111; // CORREÇÃO: ULA SLT (SUB + flag)
+                    default: ALUOp = 4'b0000; // Default para evitar latch
                 endcase
             end
             S_SHIFT_EXEC: begin
                 ALUSrcA = 0; ALUSrcB = 2'b00;
                 case(funct)
-                    F_SLL: ALUOp = 4'b1000;
-                    F_SRA: ALUOp = 4'b1001;
+                    F_SLL: ALUOp = 4'b1000; // Bypass ULA
+                    F_SRA: ALUOp = 4'b1001; // Bypass ULA
+                    default: ALUOp = 4'b0000; // CORREÇÃO: Default para evitar latch
                 endcase
             end
             S_I_TYPE_EXEC: begin
                 ALUSrcB = 2'b10;
-                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0010;
+                // CORREÇÃO: LUI usa bypass da ULA, ADDI usa ULA ADD
+                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0001;
             end
             S_R_WB: begin
                 RegWrite = 1;
+                // CORREÇÃO: Lógica para SLT
+                if (funct == F_SLT) begin
+                    WBDataSrc = 3'b101; // Novo WBDataSrc para o resultado do SLT
+                end else if (funct == F_MFHI) begin
+                    WBDataSrc = 3'b010;
+                end else if (funct == F_MFLO) begin
+                    WBDataSrc = 3'b011;
+                end else begin
+                    WBDataSrc = 3'b000; // Default (ALUOut)
+                end
                 RegDst = (opcode == OP_RTYPE) ? 2'b01 : 2'b00;
-                WBDataSrc = (funct == F_MFHI) ? 3'b010 : ((funct == F_MFLO) ? 3'b011 : 3'b000);
             end
             S_BRANCH_EXEC: begin
-                ALUSrcB = 2'b00; ALUOp = 4'b0110; PCSource = 2'b01;
+                ALUSrcB = 2'b00; 
+                ALUOp = 4'b0010; // CORREÇÃO: ULA SUB para comparar
+                PCSource = 2'b01;
                 PCWriteCond = (opcode == OP_BEQ);
                 PCWriteCondNeg = (opcode == OP_BNE);
             end
@@ -168,9 +185,10 @@ module control_unit (
                 PCWrite = 1;
                 PCSource = (funct == F_JR) ? 2'b11 : 2'b10;
             end
-            S_JAL_EXEC: begin
+            S_JAL_EXEC: begin // PC = PC + 4
                 PCWrite = 1; RegWrite = 1; PCSource = 2'b10; RegDst = 2'b10;
-                ALUSrcA = 0; ALUSrcB = 2'b01; ALUOp = 4'b0010;
+                ALUSrcA = 0; ALUSrcB = 2'b01; 
+                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
             end
             S_MULT_START: begin
                 MultStart = 1;

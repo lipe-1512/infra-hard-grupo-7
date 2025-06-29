@@ -1,21 +1,13 @@
-// FILE: cpu.v (MODIFICADO PARA GERAR RESET INTERNO)
-// O clock continua sendo uma entrada, mas o reset é gerado internamente para a simulação.
+// cpu.v
+// Datapath corrigido com lógica para SLT e reset interno para simulação.
 module cpu(
-    input wire clk // Apenas clk é uma entrada agora
+    input wire clk
 );
-    // ================== BLOCO DE SIMULAÇÃO INTERNO ==================
-    // Declara reset como um registrador interno
+    // Geração de reset para simulação
     reg reset;
-
-    // Bloco para gerar o pulso de reset automaticamente
     initial begin
-        reset = 1'b1;   // Inicia o reset em 1
-        #50;            // Espera 50ps
-        reset = 1'b0;   // Coloca o reset em 0 para sempre
+        reset = 1'b1; #50; reset = 1'b0;
     end
-    // ===============================================================
-
-    // O resto do código da CPU permanece o mesmo
     
     // Control Signals
     wire        PCWrite, PCWriteCond, PCWriteCondNeg;
@@ -43,6 +35,7 @@ module cpu(
     wire        mult_done, div_done, div_by_zero_flag;
     wire signed [31:0] hi_out, lo_out;
     wire        ula_negativo, ula_igual, ula_maior, ula_menor;
+    wire signed [31:0] slt_result; // CORREÇÃO: Fio para o resultado do SLT
 
     // IR fields
     wire [5:0]  ir_opcode;
@@ -92,24 +85,34 @@ module cpu(
                                (alu_out_reg[1:0] == 2'b10) ? mdr_out[23:16] : mdr_out[31:24];
     wire signed [31:0] byte_extended = {{24{byte_from_mdr[7]}}, byte_from_mdr};
 
+    // CORREÇÃO: Lógica para o resultado do SLT
+    assign slt_result = {31'b0, ula_menor};
+
     // Register File Write-Back Logic
     mux_RegDst mux_write_reg (.in1(ir_rt), .in2(ir_rd), .sel(RegDst[0]), .out(write_reg_mux_out));
-    assign write_data_mux_out = (WBDataSrc == 3'b001) ? mdr_out :
-                                (WBDataSrc == 3'b100) ? byte_extended :
+    assign write_data_mux_out = (WBDataSrc == 3'b001) ? mdr_out :        // LW
+                                (WBDataSrc == 3'b100) ? byte_extended :  // LB
                                 (WBDataSrc == 3'b010) ? hi_out :
                                 (WBDataSrc == 3'b011) ? lo_out :
-                                alu_out_reg; // Default
+                                (WBDataSrc == 3'b101) ? slt_result :     // CORREÇÃO: SLT
+                                alu_out_reg; // Default (ADD, ADDI, SUB, AND, etc)
     wire banco_reg_reset = reset || RegsClear;
     Banco_reg banco_registradores (.Clk(clk), .Reset(banco_reg_reset), .RegWrite(RegWrite), .ReadReg1(ir_rs), .ReadReg2(ir_rt), .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), .WriteData(write_data_mux_out), .ReadData1(read_data_1), .ReadData2(read_data_2));
     
     // ALU Logic
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
     wire signed [31:0] alu_in_a = ALUSrcA ? reg_a_out : pc_out;
+    // CORREÇÃO: Lógica de shift para LUI
+    wire signed [31:0] lui_result = sign_extended_imm << 16;
     wire signed [31:0] shifted_b_reg = (ALUOp == 4'b1000) ? ($signed(reg_b_out) << ir_shamt) : ($signed(reg_b_out) >>> ir_shamt);
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
     Ula32 ula (.A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow), .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor));
-    assign alu_result = (ALUOp[3]) ? shifted_b_reg : alu_result_from_ula;
+    
+    // CORREÇÃO: Mux de resultado da ALU, tratando LUI e SLT
+    assign alu_result = (ALUOp == 4'b1100) ? lui_result : // LUI
+                        (ALUOp[3]) ? shifted_b_reg :       // SLL, SRA
+                        alu_result_from_ula;              // Outras ops
 
     // Multiplier/Divider Units
     multiplier mult_unit (.a(reg_a_out), .b(reg_b_out), .start(MultStart), .clk(clk), .reset(reset), .result(mult_result), .done(mult_done));
