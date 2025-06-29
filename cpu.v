@@ -1,5 +1,8 @@
 // cpu.v
-// VERSÃO FINAL COMPLETA - COM XCHG e SLLM
+// VERSÃO FINAL COMPLETA E CORRIGIDA
+// Datapath modificado para suportar a lógica robusta da instrução XCHG
+// e a instrução SLLM, com multiplexadores e sinais de controle adicionais.
+
 module cpu(
     input wire clk
 );
@@ -22,12 +25,14 @@ module cpu(
     wire        MemDataInSrc;
     wire        PCClear;
     wire        RegsClear;
-    // Novos sinais de controle para XCHG
-    wire        TempRegWrite, MemtoRegA; 
+    // Novos sinais de controle para o datapath
+    wire        TempRegWrite; 
+    wire [1:0]  MemAddrSrc; // 00:PC, 01:ALUOut, 10:RegA, 11:RegB
+    wire        MemDataSrc; // 0:RegB, 1:TempReg
 
     // Datapath Wires
     wire signed [31:0] pc_out, next_pc, mem_data_out, alu_out_reg, mdr_out;
-    wire signed [31:0] reg_a_out, reg_b_out, temp_reg_out; // Adicionado temp_reg_out
+    wire signed [31:0] reg_a_out, reg_b_out, temp_reg_out;
     wire signed [31:0] read_data_1, read_data_2, sign_extended_imm, alu_result, alu_result_from_ula;
     wire signed [31:0] write_data_mux_out;
     wire [4:0]  write_reg_mux_out;
@@ -53,20 +58,29 @@ module cpu(
                      reg_a_out;
     wire cond_taken = (PCWriteCond && alu_zero) || (PCWriteCondNeg && !alu_zero);
     wire pc_write_enable = PCWrite || cond_taken;
-    registrador #(32) pc_reg (.clk(clk), .reset(reset), .Load(pc_write_enable), .Clear(PCClear), .Entrada(next_pc), .Saida(pc_out));
+    registrador #(32) pc_reg (
+        .clk(clk), .reset(reset), .Load(pc_write_enable), .Clear(PCClear), 
+        .Entrada(next_pc), .Saida(pc_out)
+    );
 
-    // Memory Logic
-    // NOVO: A fonte do endereço de memória agora também pode vir do registrador B para XCHG
-    wire [31:0] mem_address_mux_out = MemtoRegA ? reg_b_out : alu_out_reg;
-    wire [31:0] mem_address = IorD ? mem_address_mux_out : pc_out;
+    // Memory Logic - Modificada para suportar XCHG
+    wire [31:0] mem_address;
+    assign mem_address = (MemAddrSrc == 2'b00) ? pc_out :
+                         (MemAddrSrc == 2'b01) ? alu_out_reg :
+                         (MemAddrSrc == 2'b10) ? reg_a_out :
+                         reg_b_out; // 2'b11
+
     wire [31:0] modified_mdr;
     assign modified_mdr = (alu_out_reg[1:0] == 2'b00) ? {mdr_out[31:8],  reg_b_out[7:0]} :
                           (alu_out_reg[1:0] == 2'b01) ? {mdr_out[31:16], reg_b_out[7:0], mdr_out[7:0]} :
                           (alu_out_reg[1:0] == 2'b10) ? {mdr_out[31:24], reg_b_out[7:0], mdr_out[15:0]} :
                                                         {reg_b_out[7:0], mdr_out[23:0]};
-    // NOVO: A fonte de dados para escrita na memória agora pode vir do registrador temporário
-    wire [31:0] mem_datain = MemDataInSrc ? modified_mdr : 
-                             (ir_opcode == 6'b0 && ir_funct == 6'b000101) ? temp_reg_out : reg_b_out;
+    
+    wire [31:0] mem_datain;
+    assign mem_datain = MemDataSrc ? temp_reg_out : // Para XCHG_WRITE_RT
+                        MemDataInSrc ? modified_mdr : // Para SB
+                        reg_b_out; // Padrão para SW e XCHG_WRITE_RS (que usa reg_b)
+                        
     Memoria memoria (.Address(mem_address), .Clock(clk), .Wr(MemWrite), .Datain(mem_datain), .Dataout(mem_data_out));
 
     // Instruction Register and Decode (sem alterações)
@@ -81,7 +95,6 @@ module cpu(
     registrador #(32) reg_a (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(read_data_1), .Saida(reg_a_out));
     registrador #(32) reg_b (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(read_data_2), .Saida(reg_b_out));
     registrador #(32) alu_out_reg_inst (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(alu_result), .Saida(alu_out_reg));
-    // NOVO: Registrador temporário para XCHG
     registrador #(32) temp_reg (.clk(clk), .reset(reset), .Load(TempRegWrite), .Clear(1'b0), .Entrada(mdr_out), .Saida(temp_reg_out));
 
     // Byte handling logic for lb (sem alterações)
@@ -101,7 +114,6 @@ module cpu(
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
     wire signed [31:0] alu_in_a = ALUSrcA ? reg_a_out : pc_out;
     wire signed [31:0] lui_result = {ir_immediate, 16'b0};
-    // NOVO: A quantidade de shift para sllm vem do mdr_out
     wire signed [31:0] shifted_b_reg = (ALUOp == 4'b1000) ? ($signed(reg_b_out) << ((ir_opcode == 6'b000001) ? mdr_out[4:0] : ir_shamt)) : ($signed(reg_b_out) >>> ir_shamt);
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
@@ -126,6 +138,6 @@ module cpu(
         .PCSource(PCSource), .ALUOp(ALUOp), .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
         .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc),
         .PCClear(PCClear), .RegsClear(RegsClear),
-        .TempRegWrite(TempRegWrite), .MemtoRegA(MemtoRegA) // Novas saídas para FSM
+        .TempRegWrite(TempRegWrite), .MemAddrSrc(MemAddrSrc), .MemDataSrc(MemDataSrc)
     );
 endmodule
