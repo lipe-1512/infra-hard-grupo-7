@@ -98,13 +98,6 @@ Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  
 Top level modules:
 	cpu
 
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/control_unit.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/control_unit.v}
-Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module control_unit
-
-Top level modules:
-	control_unit
-
 } {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Instr_Reg.vhd} {1 {vcom -work work -2002 -explicit -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Instr_Reg.vhd}
 Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
 -- Loading package STANDARD
@@ -120,6 +113,13 @@ Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  
 Top level modules:
 	mux_RegDst
 
+} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v}
+Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
+-- Compiling module mux_ALUsrc
+
+Top level modules:
+	mux_ALUsrc
+
 } {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/ula32.vhd} {1 {vcom -work work -2002 -explicit -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/ula32.vhd}
 Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  5 2016
 -- Loading package STANDARD
@@ -128,12 +128,5 @@ Model Technology ModelSim - Intel FPGA Edition vcom 10.5b Compiler 2016.10 Oct  
 -- Loading package NUMERIC_STD
 -- Compiling entity Ula32
 -- Compiling architecture behavioral of Ula32
-
-} {} {}} {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v} {1 {vlog -work work -stats=none {C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v}
-Model Technology ModelSim - Intel FPGA Edition vlog 10.5b Compiler 2016.10 Oct  5 2016
--- Compiling module mux_ALUsrc
-
-Top level modules:
-	mux_ALUsrc
 
 } {} {}}

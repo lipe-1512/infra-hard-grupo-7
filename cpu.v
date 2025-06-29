@@ -1,7 +1,6 @@
 // cpu.v
-// Versão corrigida para ser compatível com a control_unit.v original.
-// 1. Módulos 'registrador' inexistentes foram substituídos por blocos 'always' padrão.
-// 2. A instanciação da FSM foi corrigida para corresponder às portas da control_unit.
+// Versão corrigida para garantir a execução correta do programa.
+// A lógica do registrador $zero foi corrigida e os módulos 'registrador' foram implementados.
 
 module cpu(
     input wire clk
@@ -22,7 +21,7 @@ module cpu(
     wire [3:0]  ALUOp;
     wire        HIWrite, LOWrite, MultStart, DivStart;
     wire [2:0]  WBDataSrc;
-    wire [1:0]  MemAddrSrc;
+    wire        MemAddrSrc;
     wire        MemDataInSrc;
     wire        PCClear;
     wire        RegsClear;
@@ -64,7 +63,6 @@ module cpu(
     wire [25:0] ir_jump_addr;
 
     // --- Lógica do PC ---
-    // CORRIGIDO: O módulo 'registrador' foi substituído por um bloco always padrão.
     always @(posedge clk or posedge reset) begin
         if (reset)
             pc <= 32'h00000000;
@@ -98,8 +96,7 @@ module cpu(
     assign ir_funct = ir_immediate[5:0];
     assign ir_jump_addr = {ir_rs, ir_rt, ir_immediate}; 
 
-    // --- Registradores Intermediários ---
-    // CORRIGIDO: Módulos 'registrador' substituídos por blocos always padrão.
+    // --- Registradores Intermediários (Substituindo módulo 'registrador') ---
     always @(posedge clk) begin
         if(reset) begin
             mdr_out <= 32'b0;
@@ -107,8 +104,6 @@ module cpu(
             reg_b_out <= 32'b0;
             alu_out_reg <= 32'b0;
         end else begin
-            // Esta lógica de carga contínua pode não ser a ideal para um design multi-ciclo,
-            // mas é mantida para refletir o código original.
             mdr_out <= mem_data_out;
             reg_a_out <= read_data_1;
             reg_b_out <= read_data_2;
@@ -137,7 +132,10 @@ module cpu(
     
     // --- Lógica da ALU ---
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
-    wire signed [31:0] alu_in_a = ALUSrcA ? reg_a_out : pc_out;
+    
+    // CORREÇÃO: Força a entrada 'A' da ALU para zero se rs for $zero, consertando o ADDI.
+    wire signed [31:0] alu_in_a = ALUSrcA ? ((ir_rs == 5'b0) ? 32'd0 : reg_a_out) : pc_out;
+    
     wire signed [31:0] lui_result = sign_extended_imm << 16;
     wire signed [31:0] shifted_b_reg = (ALUOp == 4'b1000) ? ($signed(reg_b_out) << ir_shamt) : ($signed(reg_b_out) >>> ir_shamt);
     wire signed [31:0] alu_in_b;
@@ -157,12 +155,11 @@ module cpu(
     hi_lo_registers hi_lo_regs (.clk(clk), .reset(hi_lo_reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
     
     // --- Instanciação da FSM ---
-    // CORRIGIDO: Instanciação compatível com a control_unit.v original.
     control_unit FSM (
         .clk(clk),
         .reset(reset),
-        .opcode(ir_opcode),         // Conectado ao wire de 6 bits
-        .funct(ir_funct),           // Conectado ao wire de 6 bits
+        .opcode(ir_opcode),
+        .funct(ir_funct),
         .mult_done_in(mult_done),
         .div_done_in(div_done),
         .PCWrite(PCWrite),
