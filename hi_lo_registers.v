@@ -1,8 +1,12 @@
 module hi_lo_registers (
-    input clk, reset,
-    input [31:0] hi_in, lo_in, // Entradas
-    input hi_write, lo_write,  // Sinais de escrita
-    output reg [31:0] hi_out, lo_out // Saídas
+    input wire clk,
+    input wire reset,
+    input wire [31:0] hi_in,
+    input wire [31:0] lo_in,
+    input wire hi_write,
+    input wire lo_write,
+    output reg [31:0] hi_out,
+    output reg [31:0] lo_out
 );
 
     always @(posedge clk or posedge reset) begin
