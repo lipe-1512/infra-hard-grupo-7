@@ -26,7 +26,7 @@ module control_unit (
     output reg MultStart,
     output reg DivStart,
     output reg [2:0] WBDataSrc,
-    output reg MemAddrSrc,
+    output reg [1:0] MemAddrSrc,
     output reg MemDataInSrc,
     output reg PCClear,
     output reg RegsClear,
