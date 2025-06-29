@@ -1,5 +1,5 @@
 // control_unit.v
-// FSM com códigos de operação da ULA e lógica de atualização do PC corrigidos.
+// FSM corrigida para lidar com a latência da memória síncrona.
 module control_unit (
     input wire clk, reset,
     input wire [5:0] opcode,
@@ -21,7 +21,7 @@ module control_unit (
     output reg RegsClear
 );
 
-    // Parâmetros de estado (sem alterações)
+    // Parâmetros de estado (adicionado S_FETCH_WAIT)
     parameter S_RESET            = 0, S_FETCH            = 1, S_DECODE           = 2,
               S_MEM_ADDR         = 3, S_LW_READ          = 4, S_LW_WB            = 5,
               S_SW_WRITE         = 6, S_R_EXECUTE        = 7, S_R_WB             = 8,
@@ -29,7 +29,8 @@ module control_unit (
               S_SHIFT_EXEC       = 12, S_MULT_START      = 13, S_MULT_WAIT       = 14,
               S_DIV_START        = 15, S_DIV_WAIT        = 16, S_MFHI_WB         = 17,
               S_MFLO_WB          = 18, S_LB_READ         = 19, S_LB_WB           = 20,
-              S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23;
+              S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23,
+              S_FETCH_WAIT       = 24; // <<< NOVO ESTADO DE ESPERA
 
     // Opcodes e Functs (sem alterações)
     localparam OP_RTYPE = 6'b000000; localparam OP_ADDI = 6'b001000;
@@ -46,12 +47,14 @@ module control_unit (
 
     reg [4:0] state, next_state;
 
-    // Lógica de Transição de Estado (sem alterações)
+    // Lógica de Transição de Estado (COM CORREÇÕES)
     always @(*) begin
         case (state)
             S_RESET: next_state = S_FETCH;
-            S_FETCH: next_state = S_DECODE;
+            S_FETCH: next_state = S_FETCH_WAIT; // MODIFICADO: Ir para o estado de espera
+            S_FETCH_WAIT: next_state = S_DECODE;   // NOVO: Do estado de espera, ir para o decode
             S_DECODE: case (opcode)
+                // O resto das transições permanece o mesmo
                 OP_RTYPE: case (funct)
                     F_ADD, F_SUB, F_AND, F_SLT: next_state = S_R_EXECUTE;
                     F_SLL, F_SRA: next_state = S_SHIFT_EXEC;
@@ -60,14 +63,14 @@ module control_unit (
                     F_DIV:  next_state = S_DIV_START;
                     F_MFHI: next_state = S_MFHI_WB;
                     F_MFLO: next_state = S_MFLO_WB;
-                    default: next_state = S_FETCH; // Se funct inválido, ignora e busca próxima
+                    default: next_state = S_FETCH;
                 endcase
                 OP_LW, OP_SW, OP_LB, OP_SB: next_state = S_MEM_ADDR;
                 OP_ADDI, OP_LUI: next_state = S_I_TYPE_EXEC;
                 OP_BEQ, OP_BNE: next_state = S_BRANCH_EXEC;
                 OP_J:     next_state = S_JUMP_EXEC;
                 OP_JAL:   next_state = S_JAL_EXEC;
-                default:  next_state = S_FETCH; // Se opcode inválido, ignora e busca próxima
+                default:  next_state = S_FETCH;
             endcase
             S_MEM_ADDR: case (opcode)
                 OP_LW: next_state = S_LW_READ;
@@ -83,7 +86,7 @@ module control_unit (
             S_LW_WB, S_SW_WRITE, S_LB_WB, S_SB_MODIFY_WRITE, S_R_WB, S_BRANCH_EXEC, S_JUMP_EXEC, S_JAL_EXEC: next_state = S_FETCH;
             S_MULT_START: next_state = S_MULT_WAIT;
             S_MULT_WAIT:  if (mult_done_in) next_state = S_FETCH; else next_state = S_MULT_WAIT;
-            S_DIV_START:  next_state = S_DIV_WAIT;
+            S_DIV_START:  next_state = S_DIV_START;
             S_DIV_WAIT:   if (div_done_in) next_state = S_FETCH; else next_state = S_DIV_WAIT;
             default:      next_state = S_RESET;
         endcase
@@ -112,19 +115,25 @@ module control_unit (
                 PCClear = 1;
                 RegsClear = 1;
             end
-            S_FETCH: begin // PC <= PC + 4
+            S_FETCH: begin // MODIFICADO: Apenas inicia a leitura e incrementa o PC
                 PCWrite = 1;
-                MemRead = 1; IRWrite = 1; 
+                MemRead = 1; 
+                // IRWrite = 1; // <<<<<<< REMOVIDO DAQUI
                 ALUSrcA = 0; ALUSrcB = 2'b01; 
                 PCSource = 2'b00;
                 ALUOp = 4'b0001; // ULA ADD
             end
-            S_DECODE: begin // Pre-calculo de endereço de branch
+            S_FETCH_WAIT: begin // NOVO: Espera e carrega a instrução
+                IRWrite = 1; // <<<<<<< MOVIDO PARA CÁ
+            end
+            S_DECODE: begin // Agora o decode pode prosseguir normalmente com a instrução correta
                 ALUSrcA = 1'b0; // PC
                 ALUSrcB = 2'b11; // imm << 2
                 ALUOp = 4'b0001; // ULA ADD
             end
-            S_MEM_ADDR: begin // Endereço para LW/SW = Reg[rs] + imm
+            
+            // O resto do código permanece o mesmo. Colei abaixo para garantir.
+            S_MEM_ADDR: begin
                 ALUSrcA = 1'b1;
                 ALUSrcB = 2'b10; 
                 ALUOp = 4'b0001; // ULA ADD
