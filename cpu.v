@@ -8,9 +8,16 @@ module cpu (
     output wire [31:0] lo_out
 );
 
-    // Sinais de controle da CPU
+    // --- Constantes de Opcode ---
+    localparam OP_BEQ = 6'b000100;
+    localparam OP_BNE = 6'b000101;
+    localparam OP_J   = 6'b000010;
+    localparam OP_JAL = 6'b000011;
+
+    // --- Sinais de Controle da CPU ---
     wire PCWrite;
     wire PCWriteCond;
+    wire PCWriteCondNeg;
     wire IorD;
     wire MemRead;
     wire MemWrite;
@@ -26,10 +33,15 @@ module cpu (
     wire MultStart;
     wire DivStart;
     wire [2:0] WBDataSrc;
-    wire [1:0] MemAddrSrc;
-    wire [1:0] MemDataSrc;
+    wire MemDataInSrc;
+    wire PCClear;
+    wire RegsClear;
+    wire TempRegWrite;
+    wire MemtoRegA;
 
-    // Sinais de dados
+    // --- Sinais de Dados do Datapath ---
+    reg  [31:0] pc;
+    wire [31:0] next_pc;
     wire [31:0] instruction_memory_data;
     wire [31:0] data_memory_read;
     wire [31:0] reg_a_out;
@@ -37,23 +49,42 @@ module cpu (
     wire [31:0] alu_in_a;
     wire [31:0] alu_in_b;
     wire [31:0] alu_out;
-    wire [31:0] pc;
-    wire [31:0] next_pc;
-    wire [5:0] opcode;
-    wire [5:0] funct;
-    wire [4:0] rs, rt, rd;
+    wire [31:0] wb_data;
+    wire [31:0] mdr_out;
+    wire [31:0] mem_data_out;
+
+    // --- Sinais da Instrução Decodificada ---
+    wire [31:0] ir;
+    wire [5:0]  opcode;
+    wire [5:0]  funct;
+    wire [4:0]  rs, rt, rd;
     wire [15:0] immediate;
+    wire [31:0] sign_extend_out;
+    
+    // --- Sinais para o Banco de Registradores ---
+    wire [4:0]  write_reg_addr;
+    wire        final_RegWrite;
+
+    // --- Sinais de Multiplicação e Divisão ---
     wire mult_done;
     wire div_done;
-    wire [31:0] mult_result;
-    wire [31:0] div_result;
+    wire div_by_zero_flag;
+    wire [63:0] mult_result;
+    wire [31:0] div_quotient;
+    wire [31:0] div_remainder;
+
+    // --- Sinais de Flags e Desvios ---
     wire zero;
     wire overflow;
+    wire ula_negativo, ula_igual, ula_maior, ula_menor;
     wire branch_taken;
-    wire jump_taken;
-    wire jal_taken;
+    wire [31:0] jump_address;
+    wire [31:0] branch_address;
+    wire [31:0] constant_4 = 32'd4;
 
-    // Instância do controlador
+    // =================================================================
+    // Módulo de Controle
+    // =================================================================
     control_unit u_control (
         .clk(clk),
         .reset(reset),
@@ -63,6 +94,7 @@ module cpu (
         .div_done_in(div_done),
         .PCWrite(PCWrite),
         .PCWriteCond(PCWriteCond),
+        .PCWriteCondNeg(PCWriteCondNeg),
         .IorD(IorD),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
@@ -78,75 +110,18 @@ module cpu (
         .MultStart(MultStart),
         .DivStart(DivStart),
         .WBDataSrc(WBDataSrc),
-        .MemAddrSrc(MemAddrSrc),
-        .MemDataSrc(MemDataSrc)
+        .MemDataInSrc(MemDataInSrc),
+        .PCClear(PCClear),
+        .RegsClear(RegsClear),
+        .TempRegWrite(TempRegWrite),
+        .MemtoRegA(MemtoRegA)
     );
 
-    // Banco de Registradores - Wrap para Banco_reg.vhd
-    register_file u_register_file (
-        .clk(clk),
-        .reset(reset),
-        .rs(rs),
-        .rt(rt),
-        .rd(rd),
-        .data_in(alu_out),
-        .RegWrite(RegWrite),
-        .RegDst(RegDst),
-        .reg_a_out(reg_a_out),
-        .reg_b_out(reg_b_out)
-    );
+    // =================================================================
+    // Datapath
+    // =================================================================
 
-    // Unidade Lógica e Aritmética - Wrap para ula32.vhd
-    alu u_alu (
-        .a(reg_a_out),
-        .b(reg_b_out),
-        .alu_op(ALUOp),
-        .result(alu_out),
-        .zero(zero),
-        .overflow(overflow)
-    );
-
-    // Memória - Wrap para Memoria.vhd
-    memory u_memory (
-        .address((IorD) ? alu_out : pc),
-        .data_in(reg_b_out),
-        .write_enable(MemWrite),
-        .read_enable(MemRead),
-        .clock(clk),
-        .data_out(data_memory_read)
-    );
-
-    // Multiplicação Multi-ciclo
-    multiplier u_multiplier (
-        .a(reg_a_out),
-        .b(reg_b_out),
-        .start(MultStart),
-        .done(mult_done),
-        .result(mult_result)
-    );
-
-    // Divisão Multi-ciclo
-    divider u_divider (
-        .a(reg_a_out),
-        .b(reg_b_out),
-        .start(DivStart),
-        .done(div_done),
-        .result(div_result)
-    );
-
-    // Registradores Hi/Lo
-    hi_lo_registers u_hi_lo (
-        .clk(clk),
-        .reset(reset),
-        .hi_in(mult_result[63:32]),
-        .lo_in(mult_result[31:0]),
-        .hi_write(HIWrite),
-        .lo_write(LOWrite),
-        .hi_out(hi_out),
-        .lo_out(lo_out)
-    );
-
-    // Program Counter
+    // --- Lógica do Program Counter (PC) ---
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             pc <= 32'h00000000;
@@ -154,42 +129,18 @@ module cpu (
             pc <= next_pc;
         end else if (PCWriteCond && branch_taken) begin
             pc <= branch_address;
-        end else if (jump_taken || jal_taken) begin
-            pc <= jump_address;
-        end else begin
-            pc <= pc + 4;
         end
     end
-
+    
     assign pc_out = pc;
+    assign branch_address = pc + (sign_extend_out << 2);
+    assign jump_address = {pc[31:28], ir[25:0], 2'b00};
+    assign next_pc = (PCSource == 2'b10) ? jump_address :
+                     (PCSource == 2'b01) ? reg_a_out  :
+                                           alu_out;
 
-    // Cálculo do endereço de salto
-    wire [31:0] jump_address;
-    assign jump_address = {pc[31:28], instruction_memory_data[25:0], 2'b00};
-
-    // Endereço de desvio condicional
-    wire [31:0] branch_address;
-    wire [15:0] sign_extend;
-    assign sign_extend = {{16{instruction_memory_data[15]}}, instruction_memory_data};
-    assign branch_address = pc + (sign_extend << 2);
-
-    // Detecta se há um desvio condicional
-    wire branch_taken;
-    assign branch_taken = (opcode == OP_BEQ || opcode == OP_BNE) && (zero ^ (opcode == OP_BNE));
-
-    // Detecta se há salto incondicional
-    wire jump_taken;
-    assign jump_taken = (opcode == OP_J);
-
-    // Detecta se há chamada a subrotina (jal)
-    wire jal_taken;
-    assign jal_taken = (opcode == OP_JAL);
-
-    // Registrador de Instrução
-    wire [31:0] ir;
+    // --- Decodificação da Instrução ---
     assign ir = instruction_memory_data;
-
-    // Decodificação dos campos da instrução
     assign opcode = ir[31:26];
     assign funct = ir[5:0];
     assign rs = ir[25:21];
@@ -197,19 +148,111 @@ module cpu (
     assign rd = ir[15:11];
     assign immediate = ir[15:0];
 
-    // Endereço do PC para próxima instrução
-    assign next_pc = (PCSource == 2'b10) ? jump_address : (branch_taken ? branch_address : pc + 4);
+    // --- Extensor de Sinal ---
+    SingExtend_16x32 u_sign_extend (.in1(immediate), .out(sign_extend_out));
 
-    // Output do registrador b para memória
-    wire [31:0] wb_data;
-    wire [31:0] mdr_out;
-    assign wb_data = (WBDataSrc == 3'b000) ? alu_out :
-                     (WBDataSrc == 3'b001) ? mdr_out :
+    // --- Lógica e Instanciação do Banco de Registradores ---
+    // CORRIGIDO: Instanciando a entidade VHDL 'Banco_reg'
+    
+    // MUX para selecionar o registrador de destino (lógica RegDst)
+    assign write_reg_addr = (RegDst[1] == 1'b0) ? rt : rd;
+    
+    // Lógica para impedir escrita no registrador $zero
+    assign final_RegWrite = RegWrite && (write_reg_addr != 5'd0);
+
+    Banco_reg u_register_file (
+        .Clk(clk),
+        .Reset(reset),
+        .RegWrite(final_RegWrite),
+        .ReadReg1(rs),
+        .ReadReg2(rt),
+        .WriteReg(write_reg_addr),
+        .WriteData(wb_data),
+        .ReadData1(reg_a_out),
+        .ReadData2(reg_b_out)
+    );
+
+    // --- MUXes de entrada da ALU ---
+    assign alu_in_a = (ALUSrcA == 1'b0) ? pc : reg_a_out;
+
+    mux_ALUsrc u_mux_alusrc (
+        .reg_b_data(reg_b_out),
+        .constant_4(constant_4),
+        .sign_ext_imm(sign_extend_out),
+        .shifted_imm({immediate, 16'h0000}),
+        .sel(ALUSrcB),
+        .out(alu_in_b)
+    );
+
+    // --- Unidade Lógica e Aritmética (ULA) ---
+    Ula32 u_alu (
+        .A(alu_in_a),
+        .B(alu_in_b),
+        .Seletor(ALUOp[2:0]),
+        .S(alu_out),
+        .Overflow(overflow),
+        .Negativo(ula_negativo),
+        .z(zero),
+        .Igual(ula_igual),
+        .Maior(ula_maior),
+        .Menor(ula_menor)
+    );
+    assign alu_result = alu_out;
+    assign branch_taken = (opcode == OP_BEQ && zero) || (opcode == OP_BNE && !zero);
+
+    // --- Memória Principal (Dados e Instruções) ---
+    Memoria u_memory (
+        .Address((IorD) ? alu_out : pc),
+        .Clock(clk),
+        .Wr(MemWrite),
+        .Datain(reg_b_out),
+        .Dataout(mem_data_out)
+    );
+
+    // Lógica para rotear a saída da memória
+    assign instruction_memory_data = (IorD == 1'b0) ? mem_data_out : 32'b0;
+    assign data_memory_read        = (IorD == 1'b1) ? mem_data_out : 32'b0;
+    assign mdr_out = data_memory_read;
+
+    // --- MUX de Write-Back para o Banco de Registradores ---
+    assign wb_data = (WBDataSrc == 3'b001) ? mdr_out :
                      (WBDataSrc == 3'b010) ? hi_out :
                      (WBDataSrc == 3'b011) ? lo_out :
-                     32'b0;
+                     alu_out;
 
-    // Mapeia saída da memória como MDR
-    assign mdr_out = data_memory_read;
+    // --- Unidades de Multiplicação e Divisão ---
+    multiplier u_multiplier (
+        .a(reg_a_out),
+        .b(reg_b_out),
+        .start(MultStart),
+        .clk(clk),
+        .reset(reset),
+        .done(mult_done),
+        .result(mult_result)
+    );
+
+    divider u_divider (
+        .a(reg_a_out),
+        .b(reg_b_out),
+        .start(DivStart),
+        .clk(clk),
+        .reset(reset),
+        .quotient(div_quotient),
+        .remainder(div_remainder),
+        .done(div_done),
+        .div_by_zero(div_by_zero_flag)
+    );
+    
+    // --- Registradores HI e LO ---
+    hi_lo_registers u_hi_lo (
+        .clk(clk),
+        .reset(reset),
+        .hi_in(HIWrite ? (MultStart ? mult_result[63:32] : div_remainder) : hi_out),
+        .lo_in(LOWrite ? (MultStart ? mult_result[31:0]  : div_quotient) : lo_out),
+        .hi_write(HIWrite),
+        .lo_write(LOWrite),
+        .hi_out(hi_out),
+        .lo_out(lo_out)
+    );
 
 endmodule
