@@ -1,5 +1,5 @@
 // cpu.v
-// Datapath corrigido com lógica para SLT e reset interno para simulação.
+// Datapath corrigido com lógica para SLT e LUI, e reset interno para simulação.
 module cpu(
     input wire clk
 );
@@ -35,7 +35,7 @@ module cpu(
     wire        mult_done, div_done, div_by_zero_flag;
     wire signed [31:0] hi_out, lo_out;
     wire        ula_negativo, ula_igual, ula_maior, ula_menor;
-    wire signed [31:0] slt_result; // CORREÇÃO: Fio para o resultado do SLT
+    wire signed [31:0] slt_result; // Fio para o resultado do SLT (0 ou 1)
 
     // IR fields
     wire [5:0]  ir_opcode;
@@ -49,7 +49,7 @@ module cpu(
                      (PCSource == 2'b01) ? alu_out_reg :
                      (PCSource == 2'b10) ? {pc_out[31:28], ir_jump_addr, 2'b00} : 
                      reg_a_out;
-    wire cond_taken = (PCWriteCond && alu_zero) || (PCWriteCondNeg && ~alu_zero);
+    wire cond_taken = (PCWriteCond && alu_zero) || (PCWriteCondNeg && !alu_zero);
     wire pc_write_enable = PCWrite || cond_taken;
     registrador #(32) pc_reg (
         .clk(clk), .reset(reset), .Load(pc_write_enable), .Clear(PCClear), 
@@ -85,16 +85,16 @@ module cpu(
                                (alu_out_reg[1:0] == 2'b10) ? mdr_out[23:16] : mdr_out[31:24];
     wire signed [31:0] byte_extended = {{24{byte_from_mdr[7]}}, byte_from_mdr};
 
-    // CORREÇÃO: Lógica para o resultado do SLT
+    // Lógica para o resultado do SLT (gera 1 se A < B, senão 0)
     assign slt_result = {31'b0, ula_menor};
 
     // Register File Write-Back Logic
     mux_RegDst mux_write_reg (.in1(ir_rt), .in2(ir_rd), .sel(RegDst[0]), .out(write_reg_mux_out));
     assign write_data_mux_out = (WBDataSrc == 3'b001) ? mdr_out :        // LW
                                 (WBDataSrc == 3'b100) ? byte_extended :  // LB
-                                (WBDataSrc == 3'b010) ? hi_out :
-                                (WBDataSrc == 3'b011) ? lo_out :
-                                (WBDataSrc == 3'b101) ? slt_result :     // CORREÇÃO: SLT
+                                (WBDataSrc == 3'b010) ? hi_out :         // MFHI
+                                (WBDataSrc == 3'b011) ? lo_out :         // MFLO
+                                (WBDataSrc == 3'b101) ? slt_result :     // SLT
                                 alu_out_reg; // Default (ADD, ADDI, SUB, AND, etc)
     wire banco_reg_reset = reset || RegsClear;
     Banco_reg banco_registradores (.Clk(clk), .Reset(banco_reg_reset), .RegWrite(RegWrite), .ReadReg1(ir_rs), .ReadReg2(ir_rt), .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), .WriteData(write_data_mux_out), .ReadData1(read_data_1), .ReadData2(read_data_2));
@@ -102,17 +102,16 @@ module cpu(
     // ALU Logic
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
     wire signed [31:0] alu_in_a = ALUSrcA ? reg_a_out : pc_out;
-    // CORREÇÃO: Lógica de shift para LUI
-    wire signed [31:0] lui_result = sign_extended_imm << 16;
+    wire signed [31:0] lui_result = {ir_immediate, 16'b0};
     wire signed [31:0] shifted_b_reg = (ALUOp == 4'b1000) ? ($signed(reg_b_out) << ir_shamt) : ($signed(reg_b_out) >>> ir_shamt);
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
     Ula32 ula (.A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow), .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor));
     
-    // CORREÇÃO: Mux de resultado da ALU, tratando LUI e SLT
-    assign alu_result = (ALUOp == 4'b1100) ? lui_result : // LUI
-                        (ALUOp[3]) ? shifted_b_reg :       // SLL, SRA
-                        alu_result_from_ula;              // Outras ops
+    // Mux de resultado da ALU, tratando LUI e Shifts (que bypassam a ULA)
+    assign alu_result = (ALUOp == 4'b1100) ? lui_result :        // LUI
+                        (ALUOp[3]) ? shifted_b_reg :         // SLL, SRA
+                        alu_result_from_ula;                // Outras ops
 
     // Multiplier/Divider Units
     multiplier mult_unit (.a(reg_a_out), .b(reg_b_out), .start(MultStart), .clk(clk), .reset(reset), .result(mult_result), .done(mult_done));

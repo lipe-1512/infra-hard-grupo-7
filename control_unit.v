@@ -1,5 +1,5 @@
 // control_unit.v
-// FSM com códigos de operação da ULA e lógica de SLT corrigidos.
+// FSM com códigos de operação da ULA e lógica de atualização do PC corrigidos.
 module control_unit (
     input wire clk, reset,
     input wire [5:0] opcode,
@@ -60,14 +60,14 @@ module control_unit (
                     F_DIV:  next_state = S_DIV_START;
                     F_MFHI: next_state = S_MFHI_WB;
                     F_MFLO: next_state = S_MFLO_WB;
-                    default: next_state = S_FETCH;
+                    default: next_state = S_FETCH; // Se funct inválido, ignora e busca próxima
                 endcase
                 OP_LW, OP_SW, OP_LB, OP_SB: next_state = S_MEM_ADDR;
                 OP_ADDI, OP_LUI: next_state = S_I_TYPE_EXEC;
                 OP_BEQ, OP_BNE: next_state = S_BRANCH_EXEC;
                 OP_J:     next_state = S_JUMP_EXEC;
                 OP_JAL:   next_state = S_JAL_EXEC;
-                default:  next_state = S_FETCH;
+                default:  next_state = S_FETCH; // Se opcode inválido, ignora e busca próxima
             endcase
             S_MEM_ADDR: case (opcode)
                 OP_LW: next_state = S_LW_READ;
@@ -112,18 +112,22 @@ module control_unit (
                 PCClear = 1;
                 RegsClear = 1;
             end
-            S_FETCH: begin // PC = PC + 4
-                MemRead = 1; IRWrite = 1; PCWrite = 1; ALUSrcA = 0;
-                ALUSrcB = 2'b01; 
-                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
+            S_FETCH: begin // PC <= PC + 4
+                PCWrite = 1;
+                MemRead = 1; IRWrite = 1; 
+                ALUSrcA = 0; ALUSrcB = 2'b01; 
+                PCSource = 2'b00;
+                ALUOp = 4'b0001; // ULA ADD
             end
             S_DECODE: begin // Pre-calculo de endereço de branch
-                ALUSrcB = 2'b11; 
-                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
+                ALUSrcA = 1'b0; // PC
+                ALUSrcB = 2'b11; // imm << 2
+                ALUOp = 4'b0001; // ULA ADD
             end
             S_MEM_ADDR: begin // Endereço para LW/SW = Reg[rs] + imm
+                ALUSrcA = 1'b1;
                 ALUSrcB = 2'b10; 
-                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
+                ALUOp = 4'b0001; // ULA ADD
             end
             S_LW_READ, S_LB_READ, S_SB_READ_WORD: begin
                 MemRead = 1; IorD = 1;
@@ -138,45 +142,47 @@ module control_unit (
                 MemWrite = 1; IorD = 1; MemDataInSrc = (opcode == OP_SB);
             end
             S_R_EXECUTE: begin
+                ALUSrcA = 1'b1;
                 ALUSrcB = 2'b00;
                 case(funct)
-                    F_ADD: ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
-                    F_SUB: ALUOp = 4'b0010; // CORREÇÃO: ULA SUB
-                    F_AND: ALUOp = 4'b0011; // CORREÇÃO: ULA AND
-                    F_SLT: ALUOp = 4'b0111; // CORREÇÃO: ULA SLT (SUB + flag)
-                    default: ALUOp = 4'b0000; // Default para evitar latch
+                    F_ADD:  ALUOp = 4'b0001; // ULA ADD
+                    F_SUB:  ALUOp = 4'b0010; // ULA SUB
+                    F_AND:  ALUOp = 4'b0011; // ULA AND
+                    F_SLT:  ALUOp = 4'b0111; // ULA SUB (para comparação)
+                    default: ALUOp = 4'b0000;
                 endcase
             end
             S_SHIFT_EXEC: begin
-                ALUSrcA = 0; ALUSrcB = 2'b00;
+                ALUSrcA = 1'b0; // Entrada é shamt
+                ALUSrcB = 2'b00; // Entrada é Reg B
                 case(funct)
                     F_SLL: ALUOp = 4'b1000; // Bypass ULA
                     F_SRA: ALUOp = 4'b1001; // Bypass ULA
-                    default: ALUOp = 4'b0000; // CORREÇÃO: Default para evitar latch
+                    default: ALUOp = 4'b0000;
                 endcase
             end
             S_I_TYPE_EXEC: begin
+                ALUSrcA = 1'b1;
                 ALUSrcB = 2'b10;
-                // CORREÇÃO: LUI usa bypass da ULA, ADDI usa ULA ADD
-                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0001;
+                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0001; // LUI (bypass) ou ADDI (ULA ADD)
             end
             S_R_WB: begin
                 RegWrite = 1;
-                // CORREÇÃO: Lógica para SLT
-                if (funct == F_SLT) begin
-                    WBDataSrc = 3'b101; // Novo WBDataSrc para o resultado do SLT
-                end else if (funct == F_MFHI) begin
-                    WBDataSrc = 3'b010;
-                end else if (funct == F_MFLO) begin
-                    WBDataSrc = 3'b011;
-                end else begin
-                    WBDataSrc = 3'b000; // Default (ALUOut)
-                end
                 RegDst = (opcode == OP_RTYPE) ? 2'b01 : 2'b00;
+                if (funct == F_SLT) begin
+                    WBDataSrc = 3'b101; // Seleciona o resultado de SLT (0 ou 1)
+                end else if (funct == F_MFHI) begin
+                    WBDataSrc = 3'b010; // Seleciona HI
+                end else if (funct == F_MFLO) begin
+                    WBDataSrc = 3'b011; // Seleciona LO
+                end else begin
+                    WBDataSrc = 3'b000; // Default (resultado da ULA)
+                end
             end
             S_BRANCH_EXEC: begin
+                ALUSrcA = 1'b1;
                 ALUSrcB = 2'b00; 
-                ALUOp = 4'b0010; // CORREÇÃO: ULA SUB para comparar
+                ALUOp = 4'b0010; // ULA SUB para comparar
                 PCSource = 2'b01;
                 PCWriteCond = (opcode == OP_BEQ);
                 PCWriteCondNeg = (opcode == OP_BNE);
@@ -185,10 +191,15 @@ module control_unit (
                 PCWrite = 1;
                 PCSource = (funct == F_JR) ? 2'b11 : 2'b10;
             end
-            S_JAL_EXEC: begin // PC = PC + 4
-                PCWrite = 1; RegWrite = 1; PCSource = 2'b10; RegDst = 2'b10;
-                ALUSrcA = 0; ALUSrcB = 2'b01; 
-                ALUOp = 4'b0001; // CORREÇÃO: ULA ADD
+            S_JAL_EXEC: begin
+                RegWrite = 1;
+                WBDataSrc = 3'b000; // Escreve o resultado da ULA (PC+4)
+                RegDst = 2'b10;     // Escreve em $ra (Reg 31)
+                PCWrite = 1;
+                PCSource = 2'b10;   // Salta para o endereço do jump
+                ALUSrcA = 0;        // ULA calcula PC+4
+                ALUSrcB = 2'b01; 
+                ALUOp = 4'b0001;    // ULA ADD
             end
             S_MULT_START: begin
                 MultStart = 1;
