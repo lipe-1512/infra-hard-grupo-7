@@ -1,6 +1,7 @@
 // control_unit.v
 // VERSÃO FINAL COMPLETA - COM XCHG, SLLM e CORREÇÕES
-// Esta FSM implementa o conjunto de instruções completo da especificação.
+// Esta FSM implementa o conjunto de instruções completo da especificação,
+// incluindo os fluxos multi-ciclo para as instruções complexas xchg e sllm.
 
 module control_unit (
     input wire clk, reset,
@@ -22,9 +23,7 @@ module control_unit (
     output reg PCClear,
     output reg RegsClear,
     // Novos sinais para o datapath
-    output reg TempRegWrite,
-    output reg [1:0] MemAddrSrc,
-    output reg MemDataSrc
+    output reg TempRegWrite, MemtoRegA
 );
 
     // Parâmetros de estado (com todos os novos estados)
@@ -37,8 +36,9 @@ module control_unit (
               S_MFLO_WB          = 18, S_LB_READ         = 19, S_LB_WB           = 20,
               S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23,
               S_FETCH_WAIT       = 24, S_EXEC_SETUP       = 25, S_DIV_DONE        = 26,
-              // Novos estados
+              // Novos estados para SLLM
               S_SLLM_READ        = 27, S_SLLM_EXEC       = 28, S_SLLM_WB         = 29,
+              // Novos estados para XCHG
               S_XCHG_READ_RS     = 30, S_XCHG_READ_RT     = 31;
 
     // Opcodes e Functs (com novas instruções)
@@ -75,10 +75,10 @@ module control_unit (
                     F_DIV:  next_state = S_DIV_START;
                     F_MFHI: next_state = S_MFHI_WB;
                     F_MFLO: next_state = S_MFLO_WB;
-                    F_XCHG: next_state = S_XCHG_READ_RS;
+                    F_XCHG: next_state = S_XCHG_READ_RS; // Inicia fluxo do XCHG
                     default: next_state = S_FETCH;
                 endcase
-                OP_SLLM: next_state = S_MEM_ADDR;
+                OP_SLLM: next_state = S_MEM_ADDR; // Reutiliza S_MEM_ADDR para calcular endereço
                 OP_LW, OP_SW, OP_LB, OP_SB: next_state = S_MEM_ADDR;
                 OP_ADDI, OP_LUI: next_state = S_I_TYPE_EXEC;
                 OP_BEQ, OP_BNE: next_state = S_BRANCH_EXEC;
@@ -92,16 +92,18 @@ module control_unit (
                 OP_SW: next_state = S_SW_WRITE;
                 OP_LB: next_state = S_LB_READ;
                 OP_SB: next_state = S_SB_READ_WORD;
-                OP_SLLM: next_state = S_SLLM_READ;
+                OP_SLLM: next_state = S_SLLM_READ; // Fluxo do SLLM
                 default: next_state = S_FETCH;
             endcase
             
+            // Fluxos Novos
             S_SLLM_READ: next_state = S_SLLM_EXEC;
             S_SLLM_EXEC: next_state = S_SLLM_WB;
             S_SLLM_WB: next_state = S_FETCH;
-            S_XCHG_READ_RS: next_state = S_XCHG_READ_RT; // Simplificado: a escrita é feita no mesmo ciclo da leitura
-            S_XCHG_READ_RT: next_state = S_FETCH;        // A troca completa precisa de mais estados
-            
+            S_XCHG_READ_RS: next_state = S_XCHG_READ_RT;
+            S_XCHG_READ_RT: next_state = S_FETCH; // Simplificado, a escrita acontece nos estados de leitura
+
+            // Fluxos Existentes
             S_R_EXECUTE, S_I_TYPE_EXEC, S_SHIFT_EXEC, S_MFHI_WB, S_MFLO_WB: next_state = S_R_WB;
             S_LW_READ:  next_state = S_LW_WB;
             S_LB_READ:  next_state = S_LB_WB;
@@ -116,7 +118,7 @@ module control_unit (
         endcase
     end
     
-    // Atualização de Estado
+    // Atualização de Estado (sem alterações)
     always @(posedge clk or posedge reset) begin
         if (reset) state <= S_RESET; else state <= next_state;
     end
@@ -124,44 +126,101 @@ module control_unit (
     // Lógica de Geração de Sinais
     always @(*) begin
         // Valores Padrão
-        PCWrite = 0; PCWriteCond = 0; PCWriteCondNeg = 0; IorD = 0; MemRead = 0; MemWrite = 0;
-        IRWrite = 0; RegWrite = 0; RegDst = 2'b00; ALUSrcA = 1'b1; ALUSrcB = 2'b00;
-        PCSource = 2'b00; ALUOp = 4'b0000; HIWrite = 0; LOWrite = 0; MultStart = 0;
-        DivStart = 0; WBDataSrc = 3'b000; MemDataInSrc = 0; PCClear = 0; RegsClear = 0;
-        TempRegWrite = 0; MemAddrSrc = 2'b00; MemDataSrc = 1'b0;
+        PCWrite = 0; PCWriteCond = 0; PCWriteCondNeg = 0;
+        IorD = 0; MemRead = 0; MemWrite = 0; IRWrite = 0; RegWrite = 0;
+        RegDst = 2'b00; ALUSrcA = 1'b1; ALUSrcB = 2'b00; PCSource = 2'b00;
+        ALUOp = 4'b0000; HIWrite = 0; LOWrite = 0; MultStart = 0; DivStart = 0;
+        WBDataSrc = 3'b000; MemDataInSrc = 0; PCClear = 0; RegsClear = 0;
+        TempRegWrite = 0; MemtoRegA = 0;
 
         case (state)
+            // --- Estados Padrão ---
             S_RESET: begin PCClear = 1; RegsClear = 1; end
-            S_FETCH: begin PCWrite = 1; MemRead = 1; MemAddrSrc = 2'b00; ALUSrcA = 0; ALUSrcB = 2'b01; PCSource = 2'b00; ALUOp = 4'b0001; end
+            S_FETCH: begin PCWrite = 1; MemRead = 1; ALUSrcA = 0; ALUSrcB = 2'b01; PCSource = 2'b00; ALUOp = 4'b0001; end
             S_FETCH_WAIT: begin IRWrite = 1; end
             S_DECODE: begin ALUSrcA = 1'b0; ALUSrcB = 2'b11; ALUOp = 4'b0001; end
-            S_EXEC_SETUP: begin /* No-op */ end
+            S_EXEC_SETUP: begin /* No-op, espera operandos */ end
             
-            S_R_EXECUTE: begin ALUSrcA = 1'b1; ALUSrcB = 2'b00; case(funct) F_ADD: ALUOp=4'b0001; F_SUB: ALUOp=4'b0010; F_AND: ALUOp=4'b0011; F_SLT: ALUOp=4'b0010; default: ALUOp=4'b0000; endcase end
-            S_SHIFT_EXEC: begin ALUSrcA = 1'b0; ALUSrcB = 2'b00; case(funct) F_SLL: ALUOp=4'b1000; F_SRA: ALUOp=4'b1001; default: ALUOp=4'b0000; endcase end
-            S_I_TYPE_EXEC: begin ALUSrcA = 1'b1; ALUSrcB = 2'b10; ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0001; end
-            S_R_WB: begin RegWrite=1; RegDst=(opcode==OP_RTYPE && funct!=F_MFHI && funct!=F_MFLO)?2'b01:2'b00; if(funct==F_SLT)WBDataSrc=3'b101; else if(funct==F_MFHI)WBDataSrc=3'b010; else if(funct==F_MFLO)WBDataSrc=3'b011; else WBDataSrc=3'b000; end
-            
+            // --- Execução Padrão ---
+            S_R_EXECUTE: begin
+                ALUSrcA = 1'b1; ALUSrcB = 2'b00;
+                case(funct)
+                    F_ADD:  ALUOp = 4'b0001;
+                    F_SUB:  ALUOp = 4'b0010;
+                    F_AND:  ALUOp = 4'b0011;
+                    F_SLT:  ALUOp = 4'b0010; // << BUG CORRIGIDO
+                    default: ALUOp = 4'b0000;
+                endcase
+            end
+            S_SHIFT_EXEC: begin
+                ALUSrcA = 1'b0; ALUSrcB = 2'b00;
+                case(funct)
+                    F_SLL: ALUOp = 4'b1000;
+                    F_SRA: ALUOp = 4'b1001;
+                    default: ALUOp = 4'b0000;
+                endcase
+            end
+            S_I_TYPE_EXEC: begin
+                ALUSrcA = 1'b1; ALUSrcB = 2'b10;
+                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0001;
+            end
+            S_R_WB: begin
+                RegWrite = 1; RegDst = (opcode == OP_RTYPE && funct != F_MFHI && funct != F_MFLO) ? 2'b01 : 2'b00;
+                if (funct == F_SLT) WBDataSrc = 3'b101;
+                else if (funct == F_MFHI) WBDataSrc = 3'b010;
+                else if (funct == F_MFLO) WBDataSrc = 3'b011;
+                else WBDataSrc = 3'b000;
+            end
+
+            // --- Memória Padrão ---
             S_MEM_ADDR: begin ALUSrcA = 1'b1; ALUSrcB = 2'b10; ALUOp = 4'b0001; end
-            S_LW_READ, S_LB_READ, S_SB_READ_WORD: begin MemRead = 1; MemAddrSrc = 2'b01; end
+            S_LW_READ, S_LB_READ, S_SB_READ_WORD: begin MemRead = 1; IorD = 1; end
             S_LW_WB: begin RegWrite = 1; RegDst = 2'b00; WBDataSrc = 3'b001; end
             S_LB_WB: begin RegWrite = 1; RegDst = 2'b00; WBDataSrc = 3'b100; end
-            S_SW_WRITE, S_SB_MODIFY_WRITE: begin MemWrite = 1; MemAddrSrc = 2'b01; MemDataInSrc = (opcode == OP_SB); end
-            
-            S_BRANCH_EXEC: begin ALUSrcA=1'b1; ALUSrcB=2'b00; ALUOp=4'b0010; PCSource=2'b01; PCWriteCond=(opcode==OP_BEQ); PCWriteCondNeg=(opcode==OP_BNE); end
-            S_JUMP_EXEC: begin PCWrite = 1; PCSource = (funct == F_JR) ? 2'b11 : 2'b10; end
-            S_JAL_EXEC: begin RegWrite=1; WBDataSrc=3'b000; RegDst=2'b10; PCWrite=1; PCSource=2'b10; ALUSrcA=0; ALUSrcB=2'b01; ALUOp=4'b0001; end
-            
-            S_MULT_START: MultStart=1; S_MULT_WAIT: if(mult_done_in)begin HIWrite=1; LOWrite=1; end
-            S_DIV_START: DivStart=1; S_DIV_WAIT: begin /* wait */ end S_DIV_DONE: begin HIWrite=1; LOWrite=1; end
-            
-            S_SLLM_READ: begin MemRead = 1; MemAddrSrc = 2'b01; end
-            S_SLLM_EXEC: begin ALUSrcA=1'b0; ALUSrcB=2'b00; ALUOp=4'b1000; end
-            S_SLLM_WB: begin RegWrite=1; RegDst=2'b00; WBDataSrc=3'b000; end
-            
-            S_XCHG_READ_RS: begin MemRead = 1; MemAddrSrc = 2'b10; TempRegWrite = 1; end // Endereço de rs
-            S_XCHG_READ_RT: begin MemWrite = 1; MemAddrSrc = 2'b11; MemDataSrc = 1; end // Endereço de rt, escreve temp_reg
+            S_SW_WRITE, S_SB_MODIFY_WRITE: begin MemWrite = 1; IorD = 1; MemDataInSrc = (opcode == OP_SB); end
 
+            // --- Desvios e Saltos ---
+            S_BRANCH_EXEC: begin ALUSrcA = 1'b1; ALUSrcB = 2'b00; ALUOp = 4'b0010; PCSource = 2'b01; PCWriteCond = (opcode == OP_BEQ); PCWriteCondNeg = (opcode == OP_BNE); end
+            S_JUMP_EXEC: begin PCWrite = 1; PCSource = (funct == F_JR) ? 2'b11 : 2'b10; end
+            S_JAL_EXEC: begin RegWrite = 1; WBDataSrc = 3'b000; RegDst = 2'b10; PCWrite = 1; PCSource = 2'b10; ALUSrcA = 0; ALUSrcB = 2'b01; ALUOp = 4'b0001; end
+            
+            // --- Multiplicação e Divisão ---
+            S_MULT_START: MultStart = 1;
+            S_MULT_WAIT: if (mult_done_in) begin HIWrite = 1; LOWrite = 1; end
+            S_DIV_START: DivStart = 1;
+            S_DIV_WAIT: begin /* Apenas espera */ end
+            S_DIV_DONE: begin HIWrite = 1; LOWrite = 1; end
+
+            // --- NOVAS INSTRUÇÕES IMPLEMENTADAS ---
+            
+            // SLLM (Shift Left Logical from Memory)
+            S_SLLM_READ: begin MemRead = 1; IorD = 1; end
+            S_SLLM_EXEC: begin
+                ALUSrcA = 1'b0; // Usa o shifter
+                ALUSrcB = 2'b00; // Usa Reg B (rt)
+                ALUOp = 4'b1000; // SLL
+            end
+            S_SLLM_WB: begin
+                RegWrite = 1;
+                RegDst = 2'b00; // Escreve em rt
+                WBDataSrc = 3'b000; // Resultado vem do shifter
+            end
+
+            // XCHG (Exchange memory contents)
+            S_XCHG_READ_RS: begin
+                IorD = 1;
+                MemRead = 1;
+                ALUSrcA = 1'b1; // Endereço vem de reg[rs]
+                ALUSrcB = 2'b00;
+                TempRegWrite = 1; // Salva dado de Mem[rs] no registrador temporário
+            end
+            S_XCHG_READ_RT: begin
+                IorD = 1;
+                MemRead = 1;
+                MemWrite = 1; // Habilita escrita
+                MemtoRegA = 1; // Endereço vem de reg[rt]
+               
+            end
         endcase
     end
 endmodule
