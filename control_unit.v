@@ -1,12 +1,12 @@
 // control_unit.v
-// FSM com estado de reset síncrono para controlar a inicialização do processador.
+// FSM com sintaxe Verilog corrigida para atribuições e case.
 module control_unit (
     input wire clk, reset,
     input wire [5:0] opcode,
     input wire [5:0] funct,
     input wire mult_done_in, div_done_in,
 
-    // Sinais de controle existentes
+    // Sinais de controle
     output reg PCWrite, PCWriteCond, PCWriteCondNeg,
     output reg IorD, MemRead, MemWrite, IRWrite, RegWrite,
     output reg [1:0] RegDst,
@@ -17,13 +17,11 @@ module control_unit (
     output reg HIWrite, LOWrite, MultStart, DivStart,
     output reg [2:0] WBDataSrc,
     output reg MemDataInSrc,
-    
-    // Novos sinais para o reset síncrono
-    output reg PCClear,      // Sinal para limpar o Program Counter
-    output reg RegsClear    // Sinal para limpar o Banco de Regs e HI/LO
+    output reg PCClear,
+    output reg RegsClear
 );
 
-    // Adiciona o novo estado S_RESET
+    // Parâmetros de estado (sem alterações)
     parameter S_RESET            = 0, S_FETCH            = 1, S_DECODE           = 2,
               S_MEM_ADDR         = 3, S_LW_READ          = 4, S_LW_WB            = 5,
               S_SW_WRITE         = 6, S_R_EXECUTE        = 7, S_R_WB             = 8,
@@ -31,10 +29,9 @@ module control_unit (
               S_SHIFT_EXEC       = 12, S_MULT_START      = 13, S_MULT_WAIT       = 14,
               S_DIV_START        = 15, S_DIV_WAIT        = 16, S_MFHI_WB         = 17,
               S_MFLO_WB          = 18, S_LB_READ         = 19, S_LB_WB           = 20,
-              S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC = 23;
+              S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23;
 
-
-    // Opcodes e Functs
+    // Opcodes e Functs (sem alterações)
     localparam OP_RTYPE = 6'b000000; localparam OP_ADDI = 6'b001000;
     localparam OP_LW    = 6'b100011; localparam OP_SW   = 6'b101011;
     localparam OP_BEQ   = 6'b000100; localparam OP_BNE  = 6'b000101;
@@ -49,7 +46,7 @@ module control_unit (
 
     reg [4:0] state, next_state;
 
-    // Lógica de Transição de Estado
+    // Lógica de Transição de Estado (sem alterações, estava correta)
     always @(*) begin
         case (state)
             S_RESET: next_state = S_FETCH;
@@ -92,41 +89,98 @@ module control_unit (
         endcase
     end
     
-    // Atualização de Estado (Síncrono)
+    // Atualização de Estado (sem alterações, estava correta)
     always @(posedge clk) begin
         if (reset) state <= S_RESET;
         else state <= next_state;
     end
 
-    // Lógica de Geração de Sinais
+    // Lógica de Geração de Sinais (COM SINTAXE CORRIGIDA)
     always @(*) begin
-        // Valores Padrão
-        {PCWrite, PCWriteCond, PCWriteCondNeg, IorD, MemRead, MemWrite, IRWrite, RegWrite} = 8'b0;
-        {RegDst, ALUSrcB, PCSource} = 6'b0;
-        ALUSrcA = 1'b1; ALUOp = 4'b0; HIWrite = 0; LOWrite = 0;
-        {MultStart, DivStart, MemDataInSrc, PCClear, RegsClear} = 5'b0;
-        WBDataSrc = 3'b0;
+        // Valores Padrão - Atribuição individual para cada sinal
+        PCWrite = 0; PCWriteCond = 0; PCWriteCondNeg = 0;
+        IorD = 0; MemRead = 0; MemWrite = 0; IRWrite = 0; RegWrite = 0;
+        RegDst = 2'b00; ALUSrcA = 1'b1; ALUSrcB = 2'b00; PCSource = 2'b00;
+        ALUOp = 4'b0000; HIWrite = 0; LOWrite = 0; MultStart = 0; DivStart = 0;
+        WBDataSrc = 3'b000; MemDataInSrc = 0; PCClear = 0; RegsClear = 0;
 
         case (state)
-            S_RESET: {PCClear, RegsClear} = 2'b11;
-            S_FETCH: {MemRead, IRWrite, PCWrite, ALUSrcA} = 4'b1110; {ALUSrcB, ALUOp} = {2'b01, 4'b0010};
-            S_DECODE: {ALUSrcB, ALUOp} = {2'b11, 4'b0010};
-            S_MEM_ADDR: {ALUSrcB, ALUOp} = {2'b10, 4'b0010};
-            S_LW_READ, S_LB_READ, S_SB_READ_WORD: {MemRead, IorD} = 2'b11;
-            S_LW_WB: {RegWrite, RegDst, WBDataSrc} = {1'b1, 2'b00, 3'b001};
-            S_LB_WB: {RegWrite, RegDst, WBDataSrc} = {1'b1, 2'b00, 3'b100};
-            S_SW_WRITE, S_SB_MODIFY_WRITE: {MemWrite, IorD} = 2'b11; MemDataInSrc = (opcode == OP_SB);
-            S_R_EXECUTE: ALUSrcB = 2'b00; case(funct) F_ADD: ALUOp=4'b0010; F_SUB: ALUOp=4'b0110; F_AND: ALUOp=4'b0000; F_SLT: ALUOp=4'b0111; endcase
-            S_SHIFT_EXEC: {ALUSrcA, ALUSrcB} = 2'b00; case(funct) F_SLL: ALUOp=4'b1000; F_SRA: ALUOp=4'b1001; endcase
-            S_I_TYPE_EXEC: {ALUSrcB, ALUOp} = {2'b10, (opcode==OP_LUI ? 4'b1100 : 4'b0010)};
-            S_R_WB: RegWrite=1; RegDst=(opcode==OP_RTYPE)?2'b01:2'b00; WBDataSrc=(funct==F_MFHI)?3'b010:((funct==F_MFLO)?3'b011:3'b000);
-            S_BRANCH_EXEC: {ALUSrcB, ALUOp, PCSource} = {2'b00, 4'b0110, 2'b01}; {PCWriteCond, PCWriteCondNeg} = {(opcode==OP_BEQ), (opcode==OP_BNE)};
-            S_JUMP_EXEC: PCWrite=1; PCSource=(funct==F_JR)?2'b11:2'b10;
-            S_JAL_EXEC: {PCWrite, RegWrite, PCSource, RegDst, ALUSrcA, ALUSrcB, ALUOp} = {1'b1, 1'b1, 2'b10, 2'b10, 1'b0, 2'b01, 4'b0010};
-            S_MULT_START: MultStart=1;
-            S_DIV_START: DivStart=1;
-            S_MULT_WAIT: if(mult_done_in) {HIWrite, LOWrite} = 2'b11;
-            S_DIV_WAIT: if(div_done_in) {HIWrite, LOWrite} = 2'b11;
+            S_RESET: begin
+                PCClear = 1;
+                RegsClear = 1;
+            end
+            S_FETCH: begin
+                MemRead = 1; IRWrite = 1; PCWrite = 1; ALUSrcA = 0;
+                ALUSrcB = 2'b01; ALUOp = 4'b0010;
+            end
+            S_DECODE: begin
+                ALUSrcB = 2'b11; ALUOp = 4'b0010;
+            end
+            S_MEM_ADDR: begin
+                ALUSrcB = 2'b10; ALUOp = 4'b0010;
+            end
+            S_LW_READ, S_LB_READ, S_SB_READ_WORD: begin
+                MemRead = 1; IorD = 1;
+            end
+            S_LW_WB: begin
+                RegWrite = 1; RegDst = 2'b00; WBDataSrc = 3'b001;
+            end
+            S_LB_WB: begin
+                RegWrite = 1; RegDst = 2'b00; WBDataSrc = 3'b100;
+            end
+            S_SW_WRITE, S_SB_MODIFY_WRITE: begin
+                MemWrite = 1; IorD = 1; MemDataInSrc = (opcode == OP_SB);
+            end
+            S_R_EXECUTE: begin
+                ALUSrcB = 2'b00;
+                case(funct)
+                    F_ADD: ALUOp = 4'b0010;
+                    F_SUB: ALUOp = 4'b0110;
+                    F_AND: ALUOp = 4'b0000;
+                    F_SLT: ALUOp = 4'b0111;
+                endcase
+            end
+            S_SHIFT_EXEC: begin
+                ALUSrcA = 0; ALUSrcB = 2'b00;
+                case(funct)
+                    F_SLL: ALUOp = 4'b1000;
+                    F_SRA: ALUOp = 4'b1001;
+                endcase
+            end
+            S_I_TYPE_EXEC: begin
+                ALUSrcB = 2'b10;
+                ALUOp = (opcode == OP_LUI) ? 4'b1100 : 4'b0010;
+            end
+            S_R_WB: begin
+                RegWrite = 1;
+                RegDst = (opcode == OP_RTYPE) ? 2'b01 : 2'b00;
+                WBDataSrc = (funct == F_MFHI) ? 3'b010 : ((funct == F_MFLO) ? 3'b011 : 3'b000);
+            end
+            S_BRANCH_EXEC: begin
+                ALUSrcB = 2'b00; ALUOp = 4'b0110; PCSource = 2'b01;
+                PCWriteCond = (opcode == OP_BEQ);
+                PCWriteCondNeg = (opcode == OP_BNE);
+            end
+            S_JUMP_EXEC: begin
+                PCWrite = 1;
+                PCSource = (funct == F_JR) ? 2'b11 : 2'b10;
+            end
+            S_JAL_EXEC: begin
+                PCWrite = 1; RegWrite = 1; PCSource = 2'b10; RegDst = 2'b10;
+                ALUSrcA = 0; ALUSrcB = 2'b01; ALUOp = 4'b0010;
+            end
+            S_MULT_START: begin
+                MultStart = 1;
+            end
+            S_DIV_START: begin
+                DivStart = 1;
+            end
+            S_MULT_WAIT: begin
+                if (mult_done_in) begin HIWrite = 1; LOWrite = 1; end
+            end
+            S_DIV_WAIT: begin
+                if (div_done_in) begin HIWrite = 1; LOWrite = 1; end
+            end
         endcase
     end
 endmodule
