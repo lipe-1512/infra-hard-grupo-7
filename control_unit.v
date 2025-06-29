@@ -1,5 +1,5 @@
 // control_unit.v
-// FSM com sintaxe Verilog corrigida para atribuições e case.
+// FSM com reset assíncrono para o registrador de estado, garantindo inicialização correta.
 module control_unit (
     input wire clk, reset,
     input wire [5:0] opcode,
@@ -21,7 +21,7 @@ module control_unit (
     output reg RegsClear
 );
 
-    // Parâmetros de estado (sem alterações)
+    // Parâmetros de estado
     parameter S_RESET            = 0, S_FETCH            = 1, S_DECODE           = 2,
               S_MEM_ADDR         = 3, S_LW_READ          = 4, S_LW_WB            = 5,
               S_SW_WRITE         = 6, S_R_EXECUTE        = 7, S_R_WB             = 8,
@@ -31,7 +31,7 @@ module control_unit (
               S_MFLO_WB          = 18, S_LB_READ         = 19, S_LB_WB           = 20,
               S_SB_READ_WORD     = 21, S_SB_MODIFY_WRITE = 22, S_JAL_EXEC        = 23;
 
-    // Opcodes e Functs (sem alterações)
+    // Opcodes e Functs
     localparam OP_RTYPE = 6'b000000; localparam OP_ADDI = 6'b001000;
     localparam OP_LW    = 6'b100011; localparam OP_SW   = 6'b101011;
     localparam OP_BEQ   = 6'b000100; localparam OP_BNE  = 6'b000101;
@@ -46,7 +46,7 @@ module control_unit (
 
     reg [4:0] state, next_state;
 
-    // Lógica de Transição de Estado (sem alterações, estava correta)
+    // Lógica de Transição de Estado (sem alterações)
     always @(*) begin
         case (state)
             S_RESET: next_state = S_FETCH;
@@ -89,15 +89,18 @@ module control_unit (
         endcase
     end
     
-    // Atualização de Estado (sem alterações, estava correta)
-    always @(posedge clk) begin
-        if (reset) state <= S_RESET;
-        else state <= next_state;
+    // Atualização de Estado com RESET ASSÍNCRONO
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            state <= S_RESET;
+        end else begin
+            state <= next_state;
+        end
     end
 
-    // Lógica de Geração de Sinais (COM SINTAXE CORRIGIDA)
+    // Lógica de Geração de Sinais (sem alterações)
     always @(*) begin
-        // Valores Padrão - Atribuição individual para cada sinal
+        // Valores Padrão
         PCWrite = 0; PCWriteCond = 0; PCWriteCondNeg = 0;
         IorD = 0; MemRead = 0; MemWrite = 0; IRWrite = 0; RegWrite = 0;
         RegDst = 2'b00; ALUSrcA = 1'b1; ALUSrcB = 2'b00; PCSource = 2'b00;
