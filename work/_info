@@ -22,9 +22,9 @@ V:adHbk0Ym0TAKYW83J5Y[3
 !s100 hZ46CT_BzQl8j]02_Vf=o2
 Z7 OV;C;10.5b;63
 32
-Z8 !s110 1751164592
+Z8 !s110 1751166181
 !i10b 1
-Z9 !s108 1751164592.000000
+Z9 !s108 1751166181.000000
 Z10 !s90 -reportprogress|300|-work|work|-2002|-explicit|-stats=none|C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Banco_reg.vhd|
 Z11 !s107 C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/Banco_reg.vhd|
 !i113 1
@@ -73,11 +73,11 @@ Z17 tCvgOpt 0
 vcpu
 R8
 !i10b 1
-!s100 O:;ACn1M2S@0QSzzA0T^h0
-I`dGe1=JkIPZ9ea9Z^k<2^0
+!s100 V6`BlZmVgUi0mAbkgNX0j3
+Idef2?>dHmMc9U4LFZf>`l3
 R14
 R4
-w1751157581
+w1751165937
 8C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/cpu.v
 FC:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/cpu.v
 L0 3
@@ -260,7 +260,7 @@ R9
 R16
 R17
 vmux_ALUsrc
-Z30 !s110 1751164593
+R8
 !i10b 1
 !s100 `W^Jf;h4bg0zD:V39Ha4U0
 I<JFEXH03`l;KeEBUUI^3J1
@@ -274,7 +274,7 @@ R15
 r1
 !s85 0
 31
-Z31 !s108 1751164593.000000
+R9
 !s107 C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v|
 !s90 -reportprogress|300|-work|work|-stats=none|C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_ALUsrc.v|
 !i113 1
@@ -282,7 +282,7 @@ R16
 R17
 nmux_@a@l@usrc
 vmux_MemtoReg
-R30
+R8
 !i10b 1
 !s100 I_=J^e4<<YboY;H4;V_^G1
 I6fcjScb3Nf`JbSgQL7U6`2
@@ -296,7 +296,7 @@ R15
 r1
 !s85 0
 31
-R31
+R9
 !s107 C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_MemtoReg.v|
 !s90 -reportprogress|300|-work|work|-stats=none|C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_MemtoReg.v|
 !i113 1
@@ -304,7 +304,7 @@ R16
 R17
 nmux_@memto@reg
 vmux_PC
-R30
+Z30 !s110 1751166182
 !i10b 1
 !s100 CRHWh9b6Ek:D8<JmCcRzC3
 If;;o<zV4Mh[J1V7;hAbSP0
@@ -318,7 +318,7 @@ R15
 r1
 !s85 0
 31
-R31
+R9
 !s107 C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_PC.v|
 !s90 -reportprogress|300|-work|work|-stats=none|C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_PC.v|
 !i113 1
@@ -340,7 +340,7 @@ R15
 r1
 !s85 0
 31
-R31
+Z31 !s108 1751166182.000000
 !s107 C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_RegDst.v|
 !s90 -reportprogress|300|-work|work|-stats=none|C:/Users/felip/OneDrive/Documents/faculdade/infra hard/projetohard/infra-hard-grupo-7/mux_RegDst.v|
 !i113 1
