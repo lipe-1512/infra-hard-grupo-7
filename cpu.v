@@ -1,3 +1,8 @@
+// cpu.v
+// VERSÃO FINAL COMPLETA E CORRIGIDA
+// Datapath modificado para suportar a lógica robusta da instrução XCHG
+// e a instrução SLLM, com multiplexadores e sinais de controle adicionais.
+
 module cpu(
     input wire clk
 );
@@ -6,6 +11,7 @@ module cpu(
     initial begin
         reset = 1'b1; #50; reset = 1'b0;
     end
+    
     // Sinais de Controle da FSM
     wire        PCWrite, PCWriteCond, PCWriteCondNeg;
     wire        IorD, MemRead, MemWrite, IRWrite, RegWrite;
@@ -111,7 +117,7 @@ module cpu(
     wire hi_lo_reset = reset || RegsClear;
     hi_lo_registers hi_lo_regs (.clk(clk), .reset(hi_lo_reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
     
-    // Instanciação da FSM
+    // Instanciação da FSM - CORRIGIDA
     control_unit FSM (
         .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), .mult_done_in(mult_done), .div_done_in(div_done),
         .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), .IorD(IorD), .MemRead(MemRead),
@@ -119,6 +125,9 @@ module cpu(
         .PCSource(PCSource), .ALUOp(ALUOp), .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
         .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc),
         .PCClear(PCClear), .RegsClear(RegsClear),
-        .TempRegWrite(TempRegWrite), .MemAddrSrc(MemAddrSrc), .MemDataSrc(MemDataSrc)
+        // Novas portas adicionadas na conexão
+        .TempRegWrite(TempRegWrite), 
+        .MemAddrSrc(MemAddrSrc), 
+        .MemDataSrc(MemDataSrc)
     );
 endmodule
