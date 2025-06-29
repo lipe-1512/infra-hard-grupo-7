@@ -1,4 +1,4 @@
-module register (
+module register_file (
     input wire clk,
     input wire reset,
     input wire [4:0] rs,
@@ -11,11 +11,15 @@ module register (
     output reg [31:0] reg_b_out
 );
 
-    reg [31:0] registers[0:31];
+    // Banco de 32 registradores de 32 bits cada
+    reg [31:0] registers [0:31];
 
+    integer i;
+
+    // Inicialização dos registradores no reset
     always @(posedge clk or posedge reset) begin
         if (reset) begin
-            for (integer i = 0; i < 32; i = i + 1) begin
+            for (i = 0; i < 32; i = i + 1) begin
                 registers[i] <= 32'b0;
             end
         end else if (RegWrite) begin
@@ -27,6 +31,7 @@ module register (
         end
     end
 
+    // Leitura combinacional dos registradores
     assign reg_a_out = registers[rs];
     assign reg_b_out = registers[rt];
 
