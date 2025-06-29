@@ -6,7 +6,6 @@ module cpu(
     initial begin
         reset = 1'b1; #50; reset = 1'b0;
     end
-    
     // Sinais de Controle da FSM
     wire        PCWrite, PCWriteCond, PCWriteCondNeg;
     wire        IorD, MemRead, MemWrite, IRWrite, RegWrite;
