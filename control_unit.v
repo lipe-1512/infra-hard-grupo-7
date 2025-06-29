@@ -31,7 +31,15 @@ module control_unit (
     output reg PCClear,
     output reg RegsClear,
     output reg TempRegWrite,
-    output reg MemtoRegA
+    output reg MemtoRegA,
+
+    // Saídas para tratamento de exceções
+    output reg [2:0] exception_code,
+    output reg [31:0] epc,
+    output reg [31:0] new_pc,
+
+    // Entrada do Program Counter
+    input wire [31:0] pc
 );
 
     // Estados da FSM - Limitados a 6 estados principais
@@ -57,6 +65,7 @@ module control_unit (
     localparam OP_JAL = 6'b000011;
     localparam OP_XCHG = 6'b100011; // Instrução adicional
     localparam OP_SLLM = 6'b000001; // Instrução adicional
+    localparam OP_DIV = 6'b000011;   // Adicionado conforme necessário
 
     localparam F_ADD = 6'b100000;
     localparam F_SUB = 6'b100010;
@@ -117,6 +126,9 @@ module control_unit (
                 RegsClear = 0;
                 TempRegWrite = 0;
                 MemtoRegA = 0;
+                exception_code = 3'b000;
+                epc = 32'h00000000;
+                new_pc = 32'h00000000;
             end
 
             S_FETCH: begin
@@ -145,6 +157,9 @@ module control_unit (
                 RegsClear = 0;
                 TempRegWrite = 0;
                 MemtoRegA = 0;
+                exception_code = 3'b000;
+                epc = 32'h00000000;
+                new_pc = 32'h00000000;
             end
 
             S_DECODE: begin
@@ -175,6 +190,9 @@ module control_unit (
                 RegsClear = 0;
                 TempRegWrite = 0;
                 MemtoRegA = 0;
+                exception_code = 3'b000;
+                epc = 32'h00000000;
+                new_pc = 32'h00000000;
 
                 // Configurações condicionais com base no opcode
                 case (opcode)
@@ -195,9 +213,9 @@ module control_unit (
                                     DivStart = 1;
                                     RegWrite = 0;
                                 end else begin
-                                    exception_code = 3'b010;
                                     epc = pc;
-                                    new_pc = {pc[31:8], 8'd254}; // Endereço de exceção: divisão por zero
+                                    new_pc = { pc[31:8], 8'd254 };
+                                    exception_code = 3'b010;
                                     next_state = S_FETCH;
                                 end
                             end
@@ -211,9 +229,7 @@ module control_unit (
                                 RegDst = 2'b11; // $lo
                                 WBDataSrc = 3'b011;
                             end
-                            default: begin
-                                next_state = S_FETCH;
-                            end
+                            default: next_state = S_FETCH;
                         endcase
                     end
 
@@ -398,9 +414,7 @@ module control_unit (
                         MemDataInSrc = 1;
                     end
 
-                    default: begin
-                        next_state = S_WRITEBACK;
-                    end
+                    default: next_state = S_WRITEBACK;
                 endcase
             end
 
@@ -414,23 +428,29 @@ module control_unit (
         endcase
     end
 
-    // Detecção de exceções
-    always @(*) begin
-        if (opcode == 6'bXXXXXX) begin
-            exception_code = 3'b100; // Opcode Inválido
-            epc = pc;
-            new_pc = { pc[31:8], 8'd255 };
-        end else if (opcode == OP_DIV && rt == 0) begin
-            exception_code = 3'b010; // Divisão por Zero
-            epc = pc;
-            new_pc = { pc[31:8], 8'd254 };
-        end else if (overflow) begin
-            exception_code = 3'b001; // Overflow
-            epc = pc;
-            new_pc = { pc[31:8], 8'd253 };
+    // Detecção de exceções - Atualização ocorre apenas na borda positiva do clock
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            exception_code <= 3'b000;
+            epc <= 32'h00000000;
+            new_pc <= 32'h00000000;
         end else begin
-            exception_code = 3'b000;
-            new_pc = pc + 4;
+            if (opcode == 6'bXXXXXX) begin
+                exception_code <= 3'b100; // Opcode Inválido
+                epc <= pc;
+                new_pc <= { pc[31:8], 8'd255 };
+            end else if (opcode == OP_DIV && rt == 0) begin
+                exception_code <= 3'b010; // Divisão por Zero
+                epc <= pc;
+                new_pc <= { pc[31:8], 8'd254 };
+            end else if (overflow) begin
+                exception_code <= 3'b001; // Overflow
+                epc <= pc;
+                new_pc <= { pc[31:8], 8'd253 };
+            end else begin
+                exception_code <= 3'b000;
+                new_pc <= pc + 4;
+            end
         end
     end
 
