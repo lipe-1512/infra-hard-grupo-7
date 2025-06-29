@@ -1,8 +1,8 @@
 // cpu.v
-// Módulo Top-Level do Datapath, com as conexões da ULA corrigidas.
+// Datapath atualizado para usar reset síncrono controlado pela FSM.
 module cpu(
     input wire clk,
-    input wire reset
+    input wire reset // Sinal de reset global
 );
     // Control Signals
     wire        PCWrite, PCWriteCond, PCWriteCondNeg;
@@ -15,6 +15,9 @@ module cpu(
     wire        HIWrite, LOWrite, MultStart, DivStart;
     wire [2:0]  WBDataSrc;
     wire        MemDataInSrc;
+    // ** NOVOS SINAIS VINDOS DA FSM **
+    wire        PCClear;
+    wire        RegsClear;
 
     // Datapath Wires
     wire signed [31:0] pc_out, next_pc, mem_data_out, alu_out_reg, mdr_out;
@@ -27,8 +30,6 @@ module cpu(
     wire signed [31:0] div_quotient, div_remainder;
     wire        mult_done, div_done, div_by_zero_flag;
     wire signed [31:0] hi_out, lo_out;
-
-    // ** NOVOS WIRES DECLARADOS AQUI para corrigir os warnings **
     wire        ula_negativo, ula_igual, ula_maior, ula_menor;
 
     // IR fields
@@ -45,7 +46,10 @@ module cpu(
                      reg_a_out;
     wire cond_taken = (PCWriteCond && alu_zero) || (PCWriteCondNeg && ~alu_zero);
     wire pc_write_enable = PCWrite || cond_taken;
-    registrador #(32) pc_reg (.clk(clk), .reset(reset), .Load(pc_write_enable), .Entrada(next_pc), .Saida(pc_out));
+    registrador #(32) pc_reg (
+        .clk(clk), .reset(reset), .Load(pc_write_enable), .Clear(PCClear), 
+        .Entrada(next_pc), .Saida(pc_out)
+    );
 
     // Memory Logic
     wire [31:0] mem_address = IorD ? alu_out_reg : pc_out;
@@ -62,14 +66,13 @@ module cpu(
     assign ir_rd = ir_immediate[15:11];
     assign ir_shamt = ir_immediate[10:6];
     assign ir_funct = ir_immediate[5:0];
-    // Correção da lógica de jump address
-    assign ir_jump_addr = {ir_rs, ir_rt, ir_immediate[15:0]}; 
+    assign ir_jump_addr = {ir_rs, ir_rt, ir_immediate}; 
 
     // Internal Registers
-    registrador #(32) mdr_reg (.clk(clk), .reset(reset), .Load(1'b1), .Entrada(mem_data_out), .Saida(mdr_out));
-    registrador #(32) reg_a (.clk(clk), .reset(reset), .Load(1'b1), .Entrada(read_data_1), .Saida(reg_a_out));
-    registrador #(32) reg_b (.clk(clk), .reset(reset), .Load(1'b1), .Entrada(read_data_2), .Saida(reg_b_out));
-    registrador #(32) alu_out_reg_inst (.clk(clk), .reset(reset), .Load(1'b1), .Entrada(alu_result), .Saida(alu_out_reg));
+    registrador #(32) mdr_reg (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(mem_data_out), .Saida(mdr_out));
+    registrador #(32) reg_a (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(read_data_1), .Saida(reg_a_out));
+    registrador #(32) reg_b (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(read_data_2), .Saida(reg_b_out));
+    registrador #(32) alu_out_reg_inst (.clk(clk), .reset(reset), .Load(1'b1), .Clear(1'b0), .Entrada(alu_result), .Saida(alu_out_reg));
 
     // Byte handling logic for lb
     wire [7:0] byte_from_mdr;
@@ -85,7 +88,15 @@ module cpu(
                                 (WBDataSrc == 3'b010) ? hi_out :
                                 (WBDataSrc == 3'b011) ? lo_out :
                                 (WBDataSrc == 3'b100) ? byte_extended : 32'hxxxxxxxx;
-    Banco_reg banco_registradores (.Clk(clk), .Reset(reset), .RegWrite(RegWrite), .ReadReg1(ir_rs), .ReadReg2(ir_rt), .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), .WriteData(write_data_mux_out), .ReadData1(read_data_1), .ReadData2(read_data_2));
+                                
+    wire banco_reg_reset = reset || RegsClear;
+    Banco_reg banco_registradores (
+        .Clk(clk), .Reset(banco_reg_reset), .RegWrite(RegWrite), 
+        .ReadReg1(ir_rs), .ReadReg2(ir_rt), 
+        .WriteReg((RegDst == 2'b10) ? 5'd31 : write_reg_mux_out), 
+        .WriteData(write_data_mux_out), 
+        .ReadData1(read_data_1), .ReadData2(read_data_2)
+    );
     
     // ALU Logic
     SingExtend_16x32 sign_extender (.in1(ir_immediate), .out(sign_extended_imm));
@@ -95,7 +106,6 @@ module cpu(
     wire signed [31:0] alu_in_b;
     mux_ALUsrc alu_src_b_mux (.reg_b_data(reg_b_out), .constant_4(32'd4), .sign_ext_imm(sign_extended_imm), .shifted_imm(sign_extended_imm << 2), .sel(ALUSrcB), .out(alu_in_b));
     
-    // ** CONEXÕES ADICIONADAS AQUI **
     Ula32 ula (
         .A(alu_in_a), .B(alu_in_b), .Seletor(ALUOp[2:0]), .S(alu_result_from_ula), .z(alu_zero), .Overflow(ula_overflow),
         .Negativo(ula_negativo), .Igual(ula_igual), .Maior(ula_maior), .Menor(ula_menor)
@@ -109,14 +119,24 @@ module cpu(
     wire signed [31:0] hi_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[63:32] : div_remainder;
     wire signed [31:0] lo_in_data  = (ir_opcode == 6'b0 && ir_funct == 6'b011000) ? mult_result[31:0]  : div_quotient;
     
-    hi_lo_registers hi_lo_regs (.clk(clk), .reset(reset), .hi_in(hi_in_data), .lo_in(lo_in_data), .hi_write(HIWrite), .lo_write(LOWrite), .hi_out(hi_out), .lo_out(lo_out));
+    wire hi_lo_reset = reset || RegsClear;
+    hi_lo_registers hi_lo_regs (
+        .clk(clk), .reset(hi_lo_reset), 
+        .hi_in(hi_in_data), .lo_in(lo_in_data), 
+        .hi_write(HIWrite), .lo_write(LOWrite), 
+        .hi_out(hi_out), .lo_out(lo_out)
+    );
     
     // FSM Instantiation
     control_unit FSM (
-        .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), .mult_done_in(mult_done), .div_done_in(div_done),
-        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), .IorD(IorD), .MemRead(MemRead),
-        .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
-        .PCSource(PCSource), .ALUOp(ALUOp), .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
-        .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc)
+        .clk(clk), .reset(reset), .opcode(ir_opcode), .funct(ir_funct), 
+        .mult_done_in(mult_done), .div_done_in(div_done),
+        .PCWrite(PCWrite), .PCWriteCond(PCWriteCond), .PCWriteCondNeg(PCWriteCondNeg), 
+        .IorD(IorD), .MemRead(MemRead), .MemWrite(MemWrite), .IRWrite(IRWrite), .RegWrite(RegWrite), 
+        .RegDst(RegDst), .ALUSrcA(ALUSrcA), .ALUSrcB(ALUSrcB),
+        .PCSource(PCSource), .ALUOp(ALUOp), 
+        .HIWrite(HIWrite), .LOWrite(LOWrite), .MultStart(MultStart), .DivStart(DivStart),
+        .WBDataSrc(WBDataSrc), .MemDataInSrc(MemDataInSrc),
+        .PCClear(PCClear), .RegsClear(RegsClear)
     );
 endmodule
